@@ -147,6 +147,25 @@ func (x *Codeflow) Start(events chan agent.Event) error {
 		log.Fatal(err)
 	}
 
+	// Try to recconnect if connection drops
+	go func(session *mgo.Session) {
+		var err error
+		for {
+			err = session.Ping()
+			if err != nil {
+				fmt.Println("Lost connection to MongoDB!!")
+				session.Refresh()
+				err = session.Ping()
+				if err == nil {
+					fmt.Println("Reconnect to MongoDB successful.")
+				} else {
+					panic("Reconnect to MongoDB failed!!")
+				}
+			}
+			time.Sleep(time.Second * 10)
+		}
+	}(db.Session)
+
 	go x.Listen()
 
 	log.Printf("Started Codeflow service on %s\n", x.ServiceAddress)
