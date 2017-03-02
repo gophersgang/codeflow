@@ -169,11 +169,21 @@ func (x *Codeflow) Subscribe() []string {
 		"plugins.HeartBeat",
 		"plugins.LoadBalancer:status",
 		"plugins.DockerDeploy:status",
+		"plugins.HeartBeat",
 	}
 }
 
 func (x *Codeflow) Process(e agent.Event) error {
 	log.Printf("Process Codeflow event: %s", e.Name)
+
+	if e.Name == "plugins.HeartBeat" {
+		heartBeat := e.Payload.(plugins.HeartBeat)
+		switch heartBeat.Tick {
+		case "minute":
+			GitSyncProjects()
+		}
+		return nil
+	}
 
 	if e.Name == "plugins.DockerDeploy:status" {
 		dockerDeploy := e.Payload.(plugins.DockerDeploy)

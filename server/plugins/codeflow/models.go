@@ -28,6 +28,7 @@ type Project struct {
 	Repository            string   `bson:"repository" json:"repository"`
 	Secret                string   `bson:"secret" json:"secret"`
 	Pinged                bool     `bson:"pinged" json:"pinged"`
+	GitPublic             bool     `bson:"gitPublic" json:"gitPublic"`
 	GitSshUrl             string   `bson:"gitSshUrl" json:"gitSshUrl" validate:"required"`
 	RsaPrivateKey         string   `bson:"rsaPrivateKey" json:"-"`
 	RsaPublicKey          string   `bson:"rsaPublicKey" json:"rsaPublicKey"`

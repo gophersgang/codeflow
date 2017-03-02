@@ -7,11 +7,13 @@ func init() {
 	agent.RegisterApi(GitPing{})
 	agent.RegisterApi(GitCommit{})
 	agent.RegisterApi(GitStatus{})
+	agent.RegisterApi(GitSync{})
 	agent.RegisterApi(Release{})
 	agent.RegisterApi(DockerBuild{})
 	agent.RegisterApi(DockerDeploy{})
 	agent.RegisterApi(LoadBalancer{})
 	agent.RegisterApi(WebsocketMsg{})
+	agent.RegisterApi(HeartBeat{})
 }
 
 type State string
@@ -57,6 +59,7 @@ type Project struct {
 }
 
 type Git struct {
+	Public        bool   `json:"private"`
 	SshUrl        string `json:"gitSshUrl"`
 	RsaPrivateKey string `json:"rsaPrivateKey" role:"secret"`
 	RsaPublicKey  string `json:"rsaPublicKey" role:"secret"`
@@ -82,6 +85,14 @@ type GitStatus struct {
 	Hash       string `json:"hash"`
 	State      string `json:"state"`
 	Context    string `json:"context"`
+}
+
+type GitSync struct {
+	Action       Action  `json:"action"`
+	State        State   `json:"state"`
+	StateMessage string  `json:"stateMessage"`
+	Project      Project `json:"project"`
+	Git          Git     `json:"git"`
 }
 
 type Feature struct {

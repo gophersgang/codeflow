@@ -1001,3 +1001,26 @@ func DockerBuildRebuild(r *Release) error {
 
 	return nil
 }
+
+func GitSyncProjects() error {
+	project := Project{}
+	results := db.Collection("projects").Find(bson.M{})
+	for results.Next(&project) {
+		gitSync := plugins.GitSync{
+			Action: plugins.Update,
+			State:  plugins.Waiting,
+			Project: plugins.Project{
+				Slug:       project.Slug,
+				Repository: project.Repository,
+			},
+			Git: plugins.Git{
+				Public:        true,
+				SshUrl:        project.GitSshUrl,
+				RsaPrivateKey: project.RsaPrivateKey,
+				RsaPublicKey:  project.RsaPublicKey,
+			},
+		}
+		cf.Events <- agent.NewEvent(gitSync, nil)
+	}
+	return nil
+}
