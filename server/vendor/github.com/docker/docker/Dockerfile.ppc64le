@@ -95,7 +95,7 @@ RUN set -x \
 
 # Install Go
 # NOTE: official ppc64le go binaries weren't available until go 1.6.4 and 1.7.4
-ENV GO_VERSION 1.7.4
+ENV GO_VERSION 1.7.5
 RUN curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-ppc64le.tar.gz" \
 	| tar -xzC /usr/local
 
@@ -131,7 +131,7 @@ RUN set -x \
 	&& rm -rf "$GOPATH"
 
 # Install notary and notary-server
-ENV NOTARY_VERSION v0.5.0
+ENV NOTARY_VERSION v0.4.2
 RUN set -x \
 	&& export GOPATH="$(mktemp -d)" \
 	&& git clone https://github.com/docker/notary.git "$GOPATH/src/github.com/docker/notary" \

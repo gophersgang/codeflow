@@ -488,7 +488,7 @@ func (s *Server) UpdateService(ctx context.Context, request *api.UpdateServiceRe
 	err := s.store.Update(func(tx store.Tx) error {
 		service = store.GetService(tx, request.ServiceID)
 		if service == nil {
-			return grpc.Errorf(codes.NotFound, "service %s not found", request.ServiceID)
+			return nil
 		}
 		// temporary disable network update
 		requestSpecNetworks := request.Spec.Task.Networks
@@ -535,7 +535,9 @@ func (s *Server) UpdateService(ctx context.Context, request *api.UpdateServiceRe
 	if err != nil {
 		return nil, err
 	}
-
+	if service == nil {
+		return nil, grpc.Errorf(codes.NotFound, "service %s not found", request.ServiceID)
+	}
 	return &api.UpdateServiceResponse{
 		Service: service,
 	}, nil

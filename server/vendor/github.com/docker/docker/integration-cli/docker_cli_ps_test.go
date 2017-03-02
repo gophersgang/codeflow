@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
+	icmd "github.com/docker/docker/pkg/integration/cmd"
 	"github.com/docker/docker/pkg/stringid"
-	icmd "github.com/docker/docker/pkg/testutil/cmd"
 	"github.com/go-check/check"
 )
 
@@ -749,7 +749,7 @@ func (s *DockerSuite) TestPsShowMounts(c *check.C) {
 	// bind mount container
 	var bindMountSource string
 	var bindMountDestination string
-	if DaemonIsWindows() {
+	if DaemonIsWindows.Condition() {
 		bindMountSource = "c:\\"
 		bindMountDestination = "c:\\t"
 	} else {
@@ -942,4 +942,11 @@ func (s *DockerSuite) TestPsByOrder(c *check.C) {
 func (s *DockerSuite) TestPsFilterMissingArgErrorCode(c *check.C) {
 	_, errCode, _ := dockerCmdWithError("ps", "--filter")
 	c.Assert(errCode, checker.Equals, 125)
+}
+
+// Test case for 30291
+func (s *DockerSuite) TestPsFormatTemplateWithArg(c *check.C) {
+	runSleepingContainer(c, "-d", "--name", "top", "--label", "some.label=label.foo-bar")
+	out, _ := dockerCmd(c, "ps", "--format", `{{.Names}} {{.Label "some.label"}}`)
+	c.Assert(strings.TrimSpace(out), checker.Equals, "top label.foo-bar")
 }

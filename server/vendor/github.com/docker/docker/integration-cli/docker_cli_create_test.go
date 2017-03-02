@@ -12,9 +12,8 @@ import (
 
 	"io/ioutil"
 
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/pkg/testutil"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-check/check"
 )
@@ -356,7 +355,7 @@ func (s *DockerTrustSuite) TestCreateWhenCertExpired(c *check.C) {
 	// Certificates have 10 years of expiration
 	elevenYearsFromNow := time.Now().Add(time.Hour * 24 * 365 * 11)
 
-	testutil.RunAtDifferentDate(elevenYearsFromNow, func() {
+	runAtDifferentDate(elevenYearsFromNow, func() {
 		// Try create
 		createCmd := exec.Command(dockerBinary, "create", repoName)
 		s.trustedCmd(createCmd)
@@ -365,7 +364,7 @@ func (s *DockerTrustSuite) TestCreateWhenCertExpired(c *check.C) {
 		c.Assert(string(out), checker.Contains, "could not validate the path to a trusted root", check.Commentf("Missing expected output on trusted create in the distant future:\n%s", out))
 	})
 
-	testutil.RunAtDifferentDate(elevenYearsFromNow, func() {
+	runAtDifferentDate(elevenYearsFromNow, func() {
 		// Try create
 		createCmd := exec.Command(dockerBinary, "create", "--disable-content-trust", repoName)
 		s.trustedCmd(createCmd)

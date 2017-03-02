@@ -3,14 +3,15 @@ package container
 import (
 	"io/ioutil"
 
+	"golang.org/x/net/context"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
 	"github.com/docker/docker/cli/command/formatter"
 	"github.com/docker/docker/opts"
-	"github.com/docker/docker/pkg/templates"
+	"github.com/docker/docker/utils/templates"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 )
 
 type psOptions struct {
@@ -71,6 +72,12 @@ type listOptionsProcessor map[string]bool
 func (o listOptionsProcessor) Size() bool {
 	o["size"] = true
 	return true
+}
+
+// Label is needed here as it allows the correct pre-processing
+// because Label() is a method with arguments
+func (o listOptionsProcessor) Label(name string) string {
+	return ""
 }
 
 func buildContainerListOptions(opts *psOptions) (*types.ContainerListOptions, error) {

@@ -1,7 +1,6 @@
 package container
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http/httputil"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 
+	"golang.org/x/net/context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/cli"
@@ -17,10 +18,10 @@ import (
 	opttypes "github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/signal"
+	runconfigopts "github.com/docker/docker/runconfig/opts"
 	"github.com/docker/libnetwork/resolvconf/dns"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/net/context"
 )
 
 type runOptions struct {
@@ -33,7 +34,7 @@ type runOptions struct {
 // NewRunCommand create a new `docker run` command
 func NewRunCommand(dockerCli *command.DockerCli) *cobra.Command {
 	var opts runOptions
-	var copts *containerOptions
+	var copts *runconfigopts.ContainerOptions
 
 	cmd := &cobra.Command{
 		Use:   "run [OPTIONS] IMAGE [COMMAND] [ARG...]",
@@ -62,11 +63,11 @@ func NewRunCommand(dockerCli *command.DockerCli) *cobra.Command {
 	flags.Bool("help", false, "Print usage")
 
 	command.AddTrustedFlags(flags, true)
-	copts = addFlags(flags)
+	copts = runconfigopts.AddFlags(flags)
 	return cmd
 }
 
-func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions, copts *containerOptions) error {
+func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions, copts *runconfigopts.ContainerOptions) error {
 	stdout, stderr, stdin := dockerCli.Out(), dockerCli.Err(), dockerCli.In()
 	client := dockerCli.Client()
 	// TODO: pass this as an argument
@@ -74,13 +75,13 @@ func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions
 
 	var (
 		flAttach                              *opttypes.ListOpts
-		ErrConflictAttachDetach               = errors.New("Conflicting options: -a and -d")
-		ErrConflictRestartPolicyAndAutoRemove = errors.New("Conflicting options: --restart and --rm")
+		ErrConflictAttachDetach               = fmt.Errorf("Conflicting options: -a and -d")
+		ErrConflictRestartPolicyAndAutoRemove = fmt.Errorf("Conflicting options: --restart and --rm")
 	)
 
-	config, hostConfig, networkingConfig, err := parse(flags, copts)
+	config, hostConfig, networkingConfig, err := runconfigopts.Parse(flags, copts)
 
-	// just in case the parse does not exit
+	// just in case the Parse does not exit
 	if err != nil {
 		reportError(stderr, cmdPath, err.Error(), true)
 		return cli.StatusError{StatusCode: 125}
@@ -90,7 +91,7 @@ func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions
 		return ErrConflictRestartPolicyAndAutoRemove
 	}
 	if hostConfig.OomKillDisable != nil && *hostConfig.OomKillDisable && hostConfig.Memory == 0 {
-		fmt.Fprintln(stderr, "WARNING: Disabling the OOM killer on containers without setting a '-m/--memory' limit may be dangerous.")
+		fmt.Fprintf(stderr, "WARNING: Disabling the OOM killer on containers without setting a '-m/--memory' limit may be dangerous.\n")
 	}
 
 	if len(hostConfig.DNS) > 0 {
@@ -157,7 +158,7 @@ func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions
 		waitDisplayID = make(chan struct{})
 		go func() {
 			defer close(waitDisplayID)
-			fmt.Fprintln(stdout, createResponse.ID)
+			fmt.Fprintf(stdout, "%s\n", createResponse.ID)
 		}()
 	}
 	attach := config.AttachStdin || config.AttachStdout || config.AttachStderr
@@ -202,10 +203,11 @@ func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions
 		defer resp.Close()
 
 		errCh = promise.Go(func() error {
-			if errHijack := holdHijackedConnection(ctx, dockerCli, config.Tty, in, out, cerr, resp); errHijack != nil {
-				return errHijack
+			errHijack := holdHijackedConnection(ctx, dockerCli, config.Tty, in, out, cerr, resp)
+			if errHijack == nil {
+				return errAttach
 			}
-			return errAttach
+			return errHijack
 		})
 	}
 
@@ -231,7 +233,7 @@ func runRun(dockerCli *command.DockerCli, flags *pflag.FlagSet, opts *runOptions
 
 	if (config.AttachStdin || config.AttachStdout || config.AttachStderr) && config.Tty && dockerCli.Out().IsTerminal() {
 		if err := MonitorTtySize(ctx, dockerCli, createResponse.ID, false); err != nil {
-			fmt.Fprintln(stderr, "Error monitoring TTY size:", err)
+			fmt.Fprintf(stderr, "Error monitoring TTY size: %s\n", err)
 		}
 	}
 

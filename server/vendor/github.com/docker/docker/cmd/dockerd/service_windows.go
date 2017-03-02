@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/system"
 	"github.com/spf13/pflag"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
@@ -165,10 +166,20 @@ func registerService() error {
 		return err
 	}
 	defer m.Disconnect()
+
+	depends := []string{}
+
+	// This dependency is required on build 14393 (RS1)
+	// it is added to the platform in newer builds
+	if system.GetOSVersion().Build == 14393 {
+		depends = append(depends, "ConDrv")
+	}
+
 	c := mgr.Config{
 		ServiceType:  windows.SERVICE_WIN32_OWN_PROCESS,
 		StartType:    mgr.StartAutomatic,
 		ErrorControl: mgr.ErrorNormal,
+		Dependencies: depends,
 		DisplayName:  "Docker Engine",
 	}
 
@@ -219,7 +230,12 @@ func registerService() error {
 		return err
 	}
 
-	return eventlog.Install(*flServiceName, p, false, eventlog.Info|eventlog.Warning|eventlog.Error)
+	err = eventlog.Install(*flServiceName, p, false, eventlog.Info|eventlog.Warning|eventlog.Error)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func unregisterService() error {

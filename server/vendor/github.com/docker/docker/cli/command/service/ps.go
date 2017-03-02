@@ -1,13 +1,7 @@
 package service
 
 import (
-	"fmt"
-	"strings"
-
-	"golang.org/x/net/context"
-
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
 	"github.com/docker/docker/cli/command/idresolver"
@@ -15,10 +9,11 @@ import (
 	"github.com/docker/docker/cli/command/task"
 	"github.com/docker/docker/opts"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
 )
 
 type psOptions struct {
-	services  []string
+	serviceID string
 	quiet     bool
 	noResolve bool
 	noTrunc   bool
@@ -29,11 +24,11 @@ func newPsCommand(dockerCli *command.DockerCli) *cobra.Command {
 	opts := psOptions{filter: opts.NewFilterOpt()}
 
 	cmd := &cobra.Command{
-		Use:   "ps [OPTIONS] SERVICE [SERVICE...]",
-		Short: "List the tasks of one or more services",
-		Args:  cli.RequiresMinArgs(1),
+		Use:   "ps [OPTIONS] SERVICE",
+		Short: "List the tasks of a service",
+		Args:  cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.services = args
+			opts.serviceID = args[0]
 			return runPS(dockerCli, opts)
 		},
 	}
@@ -50,46 +45,13 @@ func runPS(dockerCli *command.DockerCli, opts psOptions) error {
 	client := dockerCli.Client()
 	ctx := context.Background()
 
+	service, _, err := client.ServiceInspectWithRaw(ctx, opts.serviceID)
+	if err != nil {
+		return err
+	}
+
 	filter := opts.filter.Value()
-
-	serviceIDFilter := filters.NewArgs()
-	serviceNameFilter := filters.NewArgs()
-	for _, service := range opts.services {
-		serviceIDFilter.Add("id", service)
-		serviceNameFilter.Add("name", service)
-	}
-	serviceByIDList, err := client.ServiceList(ctx, types.ServiceListOptions{Filters: serviceIDFilter})
-	if err != nil {
-		return err
-	}
-	serviceByNameList, err := client.ServiceList(ctx, types.ServiceListOptions{Filters: serviceNameFilter})
-	if err != nil {
-		return err
-	}
-
-	for _, service := range opts.services {
-		serviceCount := 0
-		// Lookup by ID/Prefix
-		for _, serviceEntry := range serviceByIDList {
-			if strings.HasPrefix(serviceEntry.ID, service) {
-				filter.Add("service", serviceEntry.ID)
-				serviceCount++
-			}
-		}
-
-		// Lookup by Name/Prefix
-		for _, serviceEntry := range serviceByNameList {
-			if strings.HasPrefix(serviceEntry.Spec.Annotations.Name, service) {
-				filter.Add("service", serviceEntry.ID)
-				serviceCount++
-			}
-		}
-		// If nothing has been found, return immediately.
-		if serviceCount == 0 {
-			return fmt.Errorf("no such services: %s", service)
-		}
-	}
-
+	filter.Add("service", service.ID)
 	if filter.Include("node") {
 		nodeFilters := filter.Get("node")
 		for _, nodeFilter := range nodeFilters {

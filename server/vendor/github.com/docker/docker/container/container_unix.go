@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/docker/pkg/system"
+	"github.com/docker/docker/utils"
 	"github.com/docker/docker/volume"
 	"github.com/opencontainers/runc/libcontainer/label"
 	"golang.org/x/sys/unix"
@@ -68,7 +69,7 @@ func (container *Container) CreateDaemonEnvironment(tty bool, linkedEnv []string
 	// because the env on the container can override certain default values
 	// we need to replace the 'env' keys where they match and append anything
 	// else.
-	env = ReplaceOrAppendEnvValues(env, container.Config.Env)
+	env = utils.ReplaceOrAppendEnvValues(env, container.Config.Env)
 	return env
 }
 
@@ -439,12 +440,6 @@ func (container *Container) TmpfsMounts() ([]Mount, error) {
 // cleanResourcePath cleans a resource path and prepares to combine with mnt path
 func cleanResourcePath(path string) string {
 	return filepath.Join(string(os.PathSeparator), path)
-}
-
-// canMountFS determines if the file system for the container
-// can be mounted locally. A no-op on non-Windows platforms
-func (container *Container) canMountFS() bool {
-	return true
 }
 
 // EnableServiceDiscoveryOnDefaultNetwork Enable service discovery on default network

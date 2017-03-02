@@ -35,11 +35,10 @@ func TestNoneHealthcheck(t *testing.T) {
 
 	daemon.initHealthMonitor(c)
 	if c.State.Health != nil {
-		t.Error("Expecting Health to be nil, but was not")
+		t.Errorf("Expecting Health to be nil, but was not")
 	}
 }
 
-// FIXME(vdemeester) This takes around 3s… This is *way* too long
 func TestHealthStates(t *testing.T) {
 	e := events.New()
 	_, l, _ := e.Subscribe()

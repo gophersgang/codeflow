@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
-	icmd "github.com/docker/docker/pkg/testutil/cmd"
+	"github.com/docker/docker/pkg/integration/checker"
+	icmd "github.com/docker/docker/pkg/integration/cmd"
 	"github.com/go-check/check"
 )
 
 func (s *DockerSuite) TestVolumeCLICreate(c *check.C) {
 	dockerCmd(c, "volume", "create")
 
-	_, _, err := dockerCmdWithError("volume", "create", "-d", "nosuchdriver")
-	c.Assert(err, check.NotNil)
+	_, err := runCommand(exec.Command(dockerBinary, "volume", "create", "-d", "nosuchdriver"))
+	c.Assert(err, check.Not(check.IsNil))
 
 	// test using hidden --name option
 	out, _ := dockerCmd(c, "volume", "create", "--name=test")
@@ -250,7 +250,6 @@ func (s *DockerSuite) TestVolumeCLIRm(c *check.C) {
 	)
 }
 
-// FIXME(vdemeester) should be a unit test in cli/command/volume package
 func (s *DockerSuite) TestVolumeCLINoArgs(c *check.C) {
 	out, _ := dockerCmd(c, "volume")
 	// no args should produce the cmd usage output
@@ -258,20 +257,15 @@ func (s *DockerSuite) TestVolumeCLINoArgs(c *check.C) {
 	c.Assert(out, checker.Contains, usage)
 
 	// invalid arg should error and show the command usage on stderr
-	icmd.RunCommand(dockerBinary, "volume", "somearg").Assert(c, icmd.Expected{
-		ExitCode: 1,
-		Error:    "exit status 1",
-		Err:      usage,
-	})
+	_, stderr, _, err := runCommandWithStdoutStderr(exec.Command(dockerBinary, "volume", "somearg"))
+	c.Assert(err, check.NotNil, check.Commentf(stderr))
+	c.Assert(stderr, checker.Contains, usage)
 
 	// invalid flag should error and show the flag error and cmd usage
-	result := icmd.RunCommand(dockerBinary, "volume", "--no-such-flag")
-	result.Assert(c, icmd.Expected{
-		ExitCode: 125,
-		Error:    "exit status 125",
-		Err:      usage,
-	})
-	c.Assert(result.Stderr(), checker.Contains, "unknown flag: --no-such-flag")
+	_, stderr, _, err = runCommandWithStdoutStderr(exec.Command(dockerBinary, "volume", "--no-such-flag"))
+	c.Assert(err, check.NotNil, check.Commentf(stderr))
+	c.Assert(stderr, checker.Contains, usage)
+	c.Assert(stderr, checker.Contains, "unknown flag: --no-such-flag")
 }
 
 func (s *DockerSuite) TestVolumeCLIInspectTmplError(c *check.C) {
@@ -302,7 +296,6 @@ func (s *DockerSuite) TestVolumeCLICreateWithOpts(c *check.C) {
 			c.Assert(info[4], checker.Equals, "tmpfs")
 			c.Assert(info[5], checker.Contains, "uid=1000")
 			c.Assert(info[5], checker.Contains, "size=1024k")
-			break
 		}
 	}
 	c.Assert(found, checker.Equals, true)

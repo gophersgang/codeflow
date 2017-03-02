@@ -41,8 +41,12 @@ var (
 	ErrConfChangeRefused = errors.New("raft: propose configuration change refused")
 	// ErrApplyNotSpecified is returned during the creation of a raft node when no apply method was provided
 	ErrApplyNotSpecified = errors.New("raft: apply method was not specified")
+	// ErrAppendEntry is thrown when the node fail to append an entry to the logs
+	ErrAppendEntry = errors.New("raft: failed to append entry to logs")
 	// ErrSetHardState is returned when the node fails to set the hard state
 	ErrSetHardState = errors.New("raft: failed to set the hard state for log append entry")
+	// ErrApplySnapshot is returned when the node fails to apply a snapshot
+	ErrApplySnapshot = errors.New("raft: failed to apply snapshot on raft node")
 	// ErrStopped is returned when an operation was submitted but the node was stopped in the meantime
 	ErrStopped = errors.New("raft: failed to process the request: node is stopped")
 	// ErrLostLeadership is returned when an operation was submitted but the node lost leader status before it became committed
@@ -405,7 +409,7 @@ func (n *Node) Run(ctx context.Context) error {
 
 			// Save entries to storage
 			if err := n.saveToStorage(ctx, &raftConfig, rd.HardState, rd.Entries, rd.Snapshot); err != nil {
-				log.G(ctx).WithError(err).Error("failed to save entries to storage")
+				return errors.Wrap(err, "failed to save entries to storage")
 			}
 
 			if len(rd.Messages) != 0 {
@@ -501,9 +505,7 @@ func (n *Node) Run(ctx context.Context) error {
 					n.campaignWhenAble = false
 				}
 				if len(members) == 1 && members[n.Config.ID] != nil {
-					if err := n.raftNode.Campaign(ctx); err != nil {
-						panic("raft: cannot campaign to be the leader on node restore")
-					}
+					n.raftNode.Campaign(ctx)
 				}
 			}
 
@@ -553,7 +555,7 @@ func (n *Node) needsSnapshot(ctx context.Context) bool {
 		keys := n.keyRotator.GetKeys()
 		if keys.PendingDEK != nil {
 			n.raftLogger.RotateEncryptionKey(keys.PendingDEK)
-			// we want to wait for the last index written with the old DEK to be committed, else a snapshot taken
+			// we want to wait for the last index written with the old DEK to be commited, else a snapshot taken
 			// may have an index less than the index of a WAL written with an old DEK.  We want the next snapshot
 			// written with the new key to supercede any WAL written with an old DEK.
 			n.waitForAppliedIndex = n.writtenWALIndex
@@ -710,11 +712,20 @@ func (n *Node) Join(ctx context.Context, req *api.JoinRequest) (*api.JoinRespons
 	defer n.membershipLock.Unlock()
 
 	if !n.IsMember() {
-		return nil, ErrNoRaftMember
+		return nil, grpc.Errorf(codes.FailedPrecondition, "%s", ErrNoRaftMember.Error())
 	}
 
 	if !n.isLeader() {
-		return nil, ErrLostLeadership
+		return nil, grpc.Errorf(codes.FailedPrecondition, "%s", ErrLostLeadership.Error())
+	}
+
+	// A single manager must not be able to join the raft cluster twice. If
+	// it did, that would cause the quorum to be computed incorrectly. This
+	// could happen if the WAL was deleted from an active manager.
+	for _, m := range n.cluster.Members() {
+		if m.NodeID == nodeInfo.NodeID {
+			return nil, grpc.Errorf(codes.AlreadyExists, "%s", "a raft member with this node ID already exists")
+		}
 	}
 
 	// Find a unique ID for the joining member.
@@ -734,7 +745,7 @@ func (n *Node) Join(ctx context.Context, req *api.JoinRequest) (*api.JoinRespons
 
 	requestHost, requestPort, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address %s in raft join request", remoteAddr)
+		return nil, grpc.Errorf(codes.InvalidArgument, "invalid address %s in raft join request", remoteAddr)
 	}
 
 	requestIP := net.ParseIP(requestHost)
@@ -990,6 +1001,11 @@ func (n *Node) ProcessRaftMessage(ctx context.Context, msg *api.ProcessRaftMessa
 	defer n.stopMu.RUnlock()
 
 	if n.IsMember() {
+		if msg.Message.To != n.Config.ID {
+			n.processRaftMessageLogger(ctx, msg).Errorf("received message intended for raft_id %x", msg.Message.To)
+			return &api.ProcessRaftMessageResponse{}, nil
+		}
+
 		if err := n.raftNode.Step(ctx, *msg.Message); err != nil {
 			n.processRaftMessageLogger(ctx, msg).WithError(err).Debug("raft Step failed")
 		}
@@ -1248,18 +1264,20 @@ func (n *Node) saveToStorage(
 
 	if !raft.IsEmptySnap(snapshot) {
 		if err := n.raftLogger.SaveSnapshot(snapshot); err != nil {
-			return errors.Wrap(err, "failed to save snapshot")
+			return ErrApplySnapshot
 		}
 		if err := n.raftLogger.GC(snapshot.Metadata.Index, snapshot.Metadata.Term, raftConfig.KeepOldSnapshots); err != nil {
 			log.G(ctx).WithError(err).Error("unable to clean old snapshots and WALs")
 		}
 		if err = n.raftStore.ApplySnapshot(snapshot); err != nil {
-			return errors.Wrap(err, "failed to apply snapshot on raft node")
+			return ErrApplySnapshot
 		}
 	}
 
 	if err := n.raftLogger.SaveEntries(hardState, entries); err != nil {
-		return errors.Wrap(err, "failed to save raft log entries")
+		// TODO(aaronl): These error types should really wrap more
+		// detailed errors.
+		return ErrApplySnapshot
 	}
 
 	if len(entries) > 0 {
@@ -1270,7 +1288,7 @@ func (n *Node) saveToStorage(
 	}
 
 	if err = n.raftStore.Append(entries); err != nil {
-		return errors.Wrap(err, "failed to append raft log entries")
+		return ErrAppendEntry
 	}
 
 	return nil
@@ -1401,11 +1419,15 @@ func (n *Node) sendToMember(ctx context.Context, members map[uint64]*membership.
 			officialHost, officialPort, _ := net.SplitHostPort(conn.Addr)
 			if officialHost != lastSeenHost {
 				reconnectAddr := net.JoinHostPort(lastSeenHost, officialPort)
-				log.G(ctx).Warningf("detected address change for %x (%s -> %s)", m.To, conn.Addr, reconnectAddr)
-				if err := n.handleAddressChange(ctx, conn, reconnectAddr); err != nil {
-					log.G(ctx).WithError(err).Error("failed to hande address change")
-				}
-				return
+				log.G(ctx).Debugf("detected address change for %x (%s -> %s)", m.To, conn.Addr, reconnectAddr)
+				// TODO(aaronl): Address changes are temporarily disabled.
+				// See https://github.com/docker/docker/issues/30455.
+				// This should be reenabled in the future with additional
+				// safeguards (perhaps storing multiple addresses per node).
+				//if err := n.handleAddressChange(ctx, conn, reconnectAddr); err != nil {
+				//	log.G(ctx).WithError(err).Error("failed to hande address change")
+				//}
+				//return
 			}
 		}
 
@@ -1801,10 +1823,10 @@ func createConfigChangeEnts(ids []uint64, self uint64, term, index uint64) []raf
 // - ConfChangeAddNode, in which case the contained ID will be added into the set.
 // - ConfChangeRemoveNode, in which case the contained ID will be removed from the set.
 func getIDs(snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64 {
-	ids := make(map[uint64]bool)
+	ids := make(map[uint64]struct{})
 	if snap != nil {
 		for _, id := range snap.Metadata.ConfState.Nodes {
-			ids[id] = true
+			ids[id] = struct{}{}
 		}
 	}
 	for _, e := range ents {
@@ -1820,7 +1842,7 @@ func getIDs(snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64 {
 		}
 		switch cc.Type {
 		case raftpb.ConfChangeAddNode:
-			ids[cc.NodeID] = true
+			ids[cc.NodeID] = struct{}{}
 		case raftpb.ConfChangeRemoveNode:
 			delete(ids, cc.NodeID)
 		case raftpb.ConfChangeUpdateNode:

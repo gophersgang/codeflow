@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/go-check/check"
 )
@@ -18,7 +18,9 @@ import (
 func (s *DockerDaemonSuite) TestDaemonRestartWithPluginEnabled(c *check.C) {
 	testRequires(c, IsAmd64, Network)
 
-	s.d.Start(c)
+	if err := s.d.Start(); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 
 	if out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName); err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
@@ -33,7 +35,9 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithPluginEnabled(c *check.C) {
 		}
 	}()
 
-	s.d.Restart(c)
+	if err := s.d.Restart(); err != nil {
+		c.Fatalf("Could not restart daemon: %v", err)
+	}
 
 	out, err := s.d.Cmd("plugin", "ls")
 	if err != nil {
@@ -47,7 +51,9 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithPluginEnabled(c *check.C) {
 func (s *DockerDaemonSuite) TestDaemonRestartWithPluginDisabled(c *check.C) {
 	testRequires(c, IsAmd64, Network)
 
-	s.d.Start(c)
+	if err := s.d.Start(); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 
 	if out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName, "--disable"); err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
@@ -59,7 +65,9 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithPluginDisabled(c *check.C) {
 		}
 	}()
 
-	s.d.Restart(c)
+	if err := s.d.Restart(); err != nil {
+		c.Fatalf("Could not restart daemon: %v", err)
+	}
 
 	out, err := s.d.Cmd("plugin", "ls")
 	if err != nil {
@@ -74,12 +82,16 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithPluginDisabled(c *check.C) {
 func (s *DockerDaemonSuite) TestDaemonKillLiveRestoreWithPlugins(c *check.C) {
 	testRequires(c, IsAmd64, Network)
 
-	s.d.Start(c, "--live-restore")
+	if err := s.d.Start("--live-restore"); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 	if out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName); err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
 	}
 	defer func() {
-		s.d.Restart(c, "--live-restore")
+		if err := s.d.Restart("--live-restore"); err != nil {
+			c.Fatalf("Could not restart daemon: %v", err)
+		}
 		if out, err := s.d.Cmd("plugin", "disable", pName); err != nil {
 			c.Fatalf("Could not disable plugin: %v %s", err, out)
 		}
@@ -103,12 +115,16 @@ func (s *DockerDaemonSuite) TestDaemonKillLiveRestoreWithPlugins(c *check.C) {
 func (s *DockerDaemonSuite) TestDaemonShutdownLiveRestoreWithPlugins(c *check.C) {
 	testRequires(c, IsAmd64, Network)
 
-	s.d.Start(c, "--live-restore")
+	if err := s.d.Start("--live-restore"); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 	if out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName); err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
 	}
 	defer func() {
-		s.d.Restart(c, "--live-restore")
+		if err := s.d.Restart("--live-restore"); err != nil {
+			c.Fatalf("Could not restart daemon: %v", err)
+		}
 		if out, err := s.d.Cmd("plugin", "disable", pName); err != nil {
 			c.Fatalf("Could not disable plugin: %v %s", err, out)
 		}
@@ -117,7 +133,7 @@ func (s *DockerDaemonSuite) TestDaemonShutdownLiveRestoreWithPlugins(c *check.C)
 		}
 	}()
 
-	if err := s.d.Interrupt(); err != nil {
+	if err := s.d.cmd.Process.Signal(os.Interrupt); err != nil {
 		c.Fatalf("Could not kill daemon: %v", err)
 	}
 
@@ -131,13 +147,17 @@ func (s *DockerDaemonSuite) TestDaemonShutdownLiveRestoreWithPlugins(c *check.C)
 func (s *DockerDaemonSuite) TestDaemonShutdownWithPlugins(c *check.C) {
 	testRequires(c, IsAmd64, Network, SameHostDaemon)
 
-	s.d.Start(c)
+	if err := s.d.Start(); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 	if out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName); err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
 	}
 
 	defer func() {
-		s.d.Restart(c)
+		if err := s.d.Restart(); err != nil {
+			c.Fatalf("Could not restart daemon: %v", err)
+		}
 		if out, err := s.d.Cmd("plugin", "disable", pName); err != nil {
 			c.Fatalf("Could not disable plugin: %v %s", err, out)
 		}
@@ -146,12 +166,12 @@ func (s *DockerDaemonSuite) TestDaemonShutdownWithPlugins(c *check.C) {
 		}
 	}()
 
-	if err := s.d.Interrupt(); err != nil {
+	if err := s.d.cmd.Process.Signal(os.Interrupt); err != nil {
 		c.Fatalf("Could not kill daemon: %v", err)
 	}
 
 	for {
-		if err := syscall.Kill(s.d.Pid(), 0); err == syscall.ESRCH {
+		if err := syscall.Kill(s.d.cmd.Process.Pid, 0); err == syscall.ESRCH {
 			break
 		}
 	}
@@ -161,7 +181,7 @@ func (s *DockerDaemonSuite) TestDaemonShutdownWithPlugins(c *check.C) {
 		c.Fatalf("Expected exit code '1', got %d err: %v output: %s ", ec, err, out)
 	}
 
-	s.d.Start(c, "--live-restore")
+	s.d.Start("--live-restore")
 	cmd = exec.Command("pgrep", "-f", pluginProcessName)
 	out, _, err := runCommandWithOutput(cmd)
 	c.Assert(err, checker.IsNil, check.Commentf(out))
@@ -175,7 +195,9 @@ func (s *DockerDaemonSuite) TestVolumePlugin(c *check.C) {
 	destDir := "/tmp/data/"
 	destFile := "foo"
 
-	s.d.Start(c)
+	if err := s.d.Start(); err != nil {
+		c.Fatalf("Could not start daemon: %v", err)
+	}
 	out, err := s.d.Cmd("plugin", "install", pName, "--grant-all-permissions")
 	if err != nil {
 		c.Fatalf("Could not install plugin: %v %s", err, out)
@@ -238,7 +260,7 @@ func (s *DockerDaemonSuite) TestVolumePlugin(c *check.C) {
 func (s *DockerDaemonSuite) TestGraphdriverPlugin(c *check.C) {
 	testRequires(c, Network, IsAmd64, DaemonIsLinux, overlay2Supported, ExperimentalDaemon)
 
-	s.d.Start(c)
+	s.d.Start()
 
 	// install the plugin
 	plugin := "cpuguy83/docker-overlay2-graphdriver-plugin"
@@ -246,7 +268,7 @@ func (s *DockerDaemonSuite) TestGraphdriverPlugin(c *check.C) {
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
 	// restart the daemon with the plugin set as the storage driver
-	s.d.Restart(c, "-s", plugin, "--storage-opt", "overlay2.override_kernel_check=1")
+	s.d.Restart("-s", plugin, "--storage-opt", "overlay2.override_kernel_check=1")
 
 	// run a container
 	out, err = s.d.Cmd("run", "--rm", "busybox", "true") // this will pull busybox using the plugin
@@ -256,7 +278,7 @@ func (s *DockerDaemonSuite) TestGraphdriverPlugin(c *check.C) {
 func (s *DockerDaemonSuite) TestPluginVolumeRemoveOnRestart(c *check.C) {
 	testRequires(c, DaemonIsLinux, Network, IsAmd64)
 
-	s.d.Start(c, "--live-restore=true")
+	s.d.Start("--live-restore=true")
 
 	out, err := s.d.Cmd("plugin", "install", "--grant-all-permissions", pName)
 	c.Assert(err, checker.IsNil, check.Commentf(out))
@@ -265,7 +287,7 @@ func (s *DockerDaemonSuite) TestPluginVolumeRemoveOnRestart(c *check.C) {
 	out, err = s.d.Cmd("volume", "create", "--driver", pName, "test")
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
-	s.d.Restart(c, "--live-restore=true")
+	s.d.Restart("--live-restore=true")
 
 	out, err = s.d.Cmd("plugin", "disable", pName)
 	c.Assert(err, checker.NotNil, check.Commentf(out))

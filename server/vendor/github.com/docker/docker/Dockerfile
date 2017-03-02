@@ -54,7 +54,6 @@ RUN apt-get update && apt-get install -y \
 	git \
 	iptables \
 	jq \
-	less \
 	libapparmor-dev \
 	libcap-dev \
 	libltdl-dev \
@@ -64,7 +63,6 @@ RUN apt-get update && apt-get install -y \
 	libsqlite3-dev \
 	libsystemd-journal-dev \
 	libtool \
-	libzfs-dev \
 	mercurial \
 	net-tools \
 	pkg-config \
@@ -74,11 +72,11 @@ RUN apt-get update && apt-get install -y \
 	python-mock \
 	python-pip \
 	python-websocket \
-	tar \
 	ubuntu-zfs \
-	vim \
-	vim-common \
 	xfsprogs \
+	vim-common \
+	libzfs-dev \
+	tar \
 	zip \
 	--no-install-recommends \
 	&& pip install awscli==1.10.15
@@ -128,7 +126,7 @@ RUN set -x \
 # IMPORTANT: If the version of Go is updated, the Windows to Linux CI machines
 #            will need updating, to avoid errors. Ping #docker-maintainers on IRC
 #            with a heads-up.
-ENV GO_VERSION 1.7.4
+ENV GO_VERSION 1.7.5
 RUN curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
 	| tar -xzC /usr/local
 
@@ -155,7 +153,7 @@ RUN git clone https://github.com/golang/lint.git /go/src/github.com/golang/lint 
 	&& go install -v github.com/golang/lint/golint
 
 # Install CRIU for checkpoint/restore support
-ENV CRIU_VERSION 2.9
+ENV CRIU_VERSION 2.2
 RUN mkdir -p /usr/src/criu \
 	&& curl -sSL https://github.com/xemul/criu/archive/v${CRIU_VERSION}.tar.gz | tar -v -C /usr/src/criu/ -xz --strip-components=1 \
 	&& cd /usr/src/criu \
@@ -180,7 +178,7 @@ RUN set -x \
 	&& rm -rf "$GOPATH"
 
 # Install notary and notary-server
-ENV NOTARY_VERSION v0.5.0
+ENV NOTARY_VERSION v0.4.2
 RUN set -x \
 	&& export GOPATH="$(mktemp -d)" \
 	&& git clone https://github.com/docker/notary.git "$GOPATH/src/github.com/docker/notary" \

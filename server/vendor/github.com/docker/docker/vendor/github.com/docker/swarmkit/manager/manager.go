@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/go-events"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/ca"
@@ -100,8 +101,8 @@ type Config struct {
 	// and also when loading up any raft data on disk (as a KEK for the raft DEK).
 	UnlockKey []byte
 
-	// Availability allows a user to control the current scheduling status of a node
-	Availability api.NodeSpec_Availability
+	// PluginGetter provides access to docker's plugin inventory.
+	PluginGetter plugingetter.PluginGetter
 }
 
 // Manager is the cluster manager for Swarm.
@@ -312,7 +313,7 @@ func (m *Manager) Run(parent context.Context) error {
 		return err
 	}
 
-	baseControlAPI := controlapi.NewServer(m.raftNode.MemoryStore(), m.raftNode, m.config.SecurityConfig.RootCA())
+	baseControlAPI := controlapi.NewServer(m.raftNode.MemoryStore(), m.raftNode, m.config.SecurityConfig.RootCA(), m.config.PluginGetter)
 	baseResourceAPI := resourceapi.New(m.raftNode.MemoryStore())
 	healthServer := health.NewHealthServer()
 	localHealthServer := health.NewHealthServer()
@@ -762,7 +763,7 @@ func (m *Manager) becomeLeader(ctx context.Context) {
 			rootCA))
 		// Add Node entry for ourself, if one
 		// doesn't exist already.
-		store.CreateNode(tx, managerNode(nodeID, m.config.Availability))
+		store.CreateNode(tx, managerNode(nodeID))
 		return nil
 	})
 
@@ -783,7 +784,7 @@ func (m *Manager) becomeLeader(ctx context.Context) {
 	// shutdown underlying manager processes when leadership is
 	// lost.
 
-	m.allocator, err = allocator.New(s)
+	m.allocator, err = allocator.New(s, m.config.PluginGetter)
 	if err != nil {
 		log.G(ctx).WithError(err).Error("failed to create allocator")
 		// TODO(stevvooe): It doesn't seem correct here to fail
@@ -926,7 +927,7 @@ func defaultClusterObject(
 }
 
 // managerNode creates a new node with NodeRoleManager role.
-func managerNode(nodeID string, availability api.NodeSpec_Availability) *api.Node {
+func managerNode(nodeID string) *api.Node {
 	return &api.Node{
 		ID: nodeID,
 		Certificate: api.Certificate{
@@ -937,9 +938,8 @@ func managerNode(nodeID string, availability api.NodeSpec_Availability) *api.Nod
 			},
 		},
 		Spec: api.NodeSpec{
-			Role:         api.NodeRoleManager,
-			Membership:   api.NodeMembershipAccepted,
-			Availability: availability,
+			Role:       api.NodeRoleManager,
+			Membership: api.NodeMembershipAccepted,
 		},
 	}
 }

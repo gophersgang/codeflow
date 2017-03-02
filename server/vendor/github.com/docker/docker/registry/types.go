@@ -5,12 +5,15 @@ import (
 	"github.com/docker/docker/reference"
 )
 
-// RepositoryData tracks the image list, list of endpoints for a repository
+// RepositoryData tracks the image list, list of endpoints, and list of tokens
+// for a repository
 type RepositoryData struct {
 	// ImgList is a list of images in the repository
 	ImgList map[string]*ImgData
 	// Endpoints is a list of endpoints returned in X-Docker-Endpoints
 	Endpoints []string
+	// Tokens is currently unused (remove it?)
+	Tokens []string
 }
 
 // ImgData is used to transfer image checksums to and from the registry

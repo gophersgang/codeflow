@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/term"
+	"github.com/docker/docker/utils"
 )
 
 // Seconds to wait after sending TERM before trying KILL
@@ -93,7 +94,7 @@ func (d *Daemon) getActiveContainer(name string) (*container.Container, error) {
 
 // ContainerExecCreate sets up an exec in a running container.
 func (d *Daemon) ContainerExecCreate(name string, config *types.ExecConfig) (string, error) {
-	cntr, err := d.getActiveContainer(name)
+	container, err := d.getActiveContainer(name)
 	if err != nil {
 		return "", err
 	}
@@ -114,7 +115,7 @@ func (d *Daemon) ContainerExecCreate(name string, config *types.ExecConfig) (str
 	execConfig.OpenStdin = config.AttachStdin
 	execConfig.OpenStdout = config.AttachStdout
 	execConfig.OpenStderr = config.AttachStderr
-	execConfig.ContainerID = cntr.ID
+	execConfig.ContainerID = container.ID
 	execConfig.DetachKeys = keys
 	execConfig.Entrypoint = entrypoint
 	execConfig.Args = args
@@ -122,18 +123,18 @@ func (d *Daemon) ContainerExecCreate(name string, config *types.ExecConfig) (str
 	execConfig.Privileged = config.Privileged
 	execConfig.User = config.User
 
-	linkedEnv, err := d.setupLinkedContainers(cntr)
+	linkedEnv, err := d.setupLinkedContainers(container)
 	if err != nil {
 		return "", err
 	}
-	execConfig.Env = container.ReplaceOrAppendEnvValues(cntr.CreateDaemonEnvironment(config.Tty, linkedEnv), config.Env)
+	execConfig.Env = utils.ReplaceOrAppendEnvValues(container.CreateDaemonEnvironment(config.Tty, linkedEnv), config.Env)
 	if len(execConfig.User) == 0 {
-		execConfig.User = cntr.Config.User
+		execConfig.User = container.Config.User
 	}
 
-	d.registerExecCommand(cntr, execConfig)
+	d.registerExecCommand(container, execConfig)
 
-	d.LogContainerEvent(cntr, "exec_create: "+execConfig.Entrypoint+" "+strings.Join(execConfig.Args, " "))
+	d.LogContainerEvent(container, "exec_create: "+execConfig.Entrypoint+" "+strings.Join(execConfig.Args, " "))
 
 	return execConfig.ID, nil
 }

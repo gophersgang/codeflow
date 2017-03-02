@@ -118,7 +118,7 @@ type v1DependencyImage struct {
 	v1ImageCommon
 }
 
-func newV1DependencyImage(l layer.Layer, parent *v1DependencyImage) *v1DependencyImage {
+func newV1DependencyImage(l layer.Layer, parent *v1DependencyImage) (*v1DependencyImage, error) {
 	v1ID := digest.Digest(l.ChainID()).Hex()
 
 	config := ""
@@ -133,7 +133,7 @@ func newV1DependencyImage(l layer.Layer, parent *v1DependencyImage) *v1Dependenc
 			config: []byte(config),
 			layer:  l,
 		},
-	}
+	}, nil
 }
 
 // Retrieve the all the images to be uploaded in the correct order
@@ -227,7 +227,10 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 	}
 	l := lsl.Layer
 
-	dependencyImages, parent := generateDependencyImages(l.Parent(), dependenciesSeen)
+	dependencyImages, parent, err := generateDependencyImages(l.Parent(), dependenciesSeen)
+	if err != nil {
+		return nil, err
+	}
 
 	topImage, err := newV1TopImage(imgID, img, l, parent)
 	if err != nil {
@@ -239,29 +242,32 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 	return
 }
 
-func generateDependencyImages(l layer.Layer, dependenciesSeen map[layer.ChainID]*v1DependencyImage) (imageListForThisTag []v1Image, parent *v1DependencyImage) {
+func generateDependencyImages(l layer.Layer, dependenciesSeen map[layer.ChainID]*v1DependencyImage) (imageListForThisTag []v1Image, parent *v1DependencyImage, err error) {
 	if l == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	imageListForThisTag, parent = generateDependencyImages(l.Parent(), dependenciesSeen)
+	imageListForThisTag, parent, err = generateDependencyImages(l.Parent(), dependenciesSeen)
 
 	if dependenciesSeen != nil {
 		if dependencyImage, present := dependenciesSeen[l.ChainID()]; present {
 			// This layer is already on the list, we can ignore it
 			// and all its parents.
-			return imageListForThisTag, dependencyImage
+			return imageListForThisTag, dependencyImage, nil
 		}
 	}
 
-	dependencyImage := newV1DependencyImage(l, parent)
+	dependencyImage, err := newV1DependencyImage(l, parent)
+	if err != nil {
+		return nil, nil, err
+	}
 	imageListForThisTag = append(imageListForThisTag, dependencyImage)
 
 	if dependenciesSeen != nil {
 		dependenciesSeen[l.ChainID()] = dependencyImage
 	}
 
-	return imageListForThisTag, dependencyImage
+	return imageListForThisTag, dependencyImage, nil
 }
 
 // createImageIndex returns an index of an image's layer IDs and tags.

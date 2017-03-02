@@ -28,9 +28,7 @@ Service Mode:
 {{- if .HasUpdateStatus }}
 UpdateStatus:
  State:		{{ .UpdateStatusState }}
-{{- if .HasUpdateStatusStarted }}
  Started:	{{ .UpdateStatusStarted }}
-{{- end }}
 {{- if .UpdateIsCompleted }}
  Completed:	{{ .UpdateStatusCompleted }}
 {{- end }}
@@ -174,27 +172,23 @@ func (ctx *serviceInspectContext) ModeReplicatedReplicas() *uint64 {
 }
 
 func (ctx *serviceInspectContext) HasUpdateStatus() bool {
-	return ctx.Service.UpdateStatus != nil && ctx.Service.UpdateStatus.State != ""
+	return ctx.Service.UpdateStatus.State != ""
 }
 
 func (ctx *serviceInspectContext) UpdateStatusState() swarm.UpdateState {
 	return ctx.Service.UpdateStatus.State
 }
 
-func (ctx *serviceInspectContext) HasUpdateStatusStarted() bool {
-	return ctx.Service.UpdateStatus.StartedAt != nil
-}
-
 func (ctx *serviceInspectContext) UpdateStatusStarted() string {
-	return units.HumanDuration(time.Since(*ctx.Service.UpdateStatus.StartedAt))
+	return units.HumanDuration(time.Since(ctx.Service.UpdateStatus.StartedAt))
 }
 
 func (ctx *serviceInspectContext) UpdateIsCompleted() bool {
-	return ctx.Service.UpdateStatus.State == swarm.UpdateStateCompleted && ctx.Service.UpdateStatus.CompletedAt != nil
+	return ctx.Service.UpdateStatus.State == swarm.UpdateStateCompleted
 }
 
 func (ctx *serviceInspectContext) UpdateStatusCompleted() string {
-	return units.HumanDuration(time.Since(*ctx.Service.UpdateStatus.CompletedAt))
+	return units.HumanDuration(time.Since(ctx.Service.UpdateStatus.CompletedAt))
 }
 
 func (ctx *serviceInspectContext) UpdateStatusMessage() string {

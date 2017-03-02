@@ -47,7 +47,6 @@ func runPS(dockerCli *command.DockerCli, opts psOptions) error {
 	ctx := context.Background()
 
 	filter := getStackFilterFromOpt(opts.namespace, opts.filter)
-
 	tasks, err := client.TaskList(ctx, types.TaskListOptions{Filters: filter})
 	if err != nil {
 		return err

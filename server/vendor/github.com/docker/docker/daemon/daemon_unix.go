@@ -23,12 +23,12 @@ import (
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/image"
-	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/docker/docker/pkg/sysinfo"
 	"github.com/docker/docker/runconfig"
+	runconfigopts "github.com/docker/docker/runconfig/opts"
 	"github.com/docker/libnetwork"
 	nwconfig "github.com/docker/libnetwork/config"
 	"github.com/docker/libnetwork/drivers/bridge"
@@ -556,7 +556,7 @@ func verifyPlatformContainerSettings(daemon *Daemon, hostConfig *containertypes.
 	return warnings, nil
 }
 
-// platformReload updates configuration with platform specific options
+// platformReload update configuration with platform specific options
 func (daemon *Daemon) platformReload(config *Config) map[string]string {
 	if config.IsValueSet("runtimes") {
 		daemon.configStore.Runtimes = config.Runtimes
@@ -1041,7 +1041,7 @@ func (daemon *Daemon) registerLinks(container *container.Container, hostConfig *
 	}
 
 	for _, l := range hostConfig.Links {
-		name, alias, err := opts.ParseLink(l)
+		name, alias, err := runconfigopts.ParseLink(l)
 		if err != nil {
 			return err
 		}
@@ -1169,7 +1169,7 @@ func setupOOMScoreAdj(score int) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+
 	stringScore := strconv.Itoa(score)
 	_, err = f.WriteString(stringScore)
 	if os.IsPermission(err) {
@@ -1181,7 +1181,7 @@ func setupOOMScoreAdj(score int) error {
 		}
 		return nil
 	}
-
+	f.Close()
 	return err
 }
 
@@ -1190,6 +1190,12 @@ func (daemon *Daemon) initCgroupsPath(path string) error {
 		return nil
 	}
 
+	if daemon.configStore.CPURealtimePeriod == 0 && daemon.configStore.CPURealtimeRuntime == 0 {
+		return nil
+	}
+
+	// Recursively create cgroup to ensure that the system and all parent cgroups have values set
+	// for the period and runtime as this limits what the children can be set to.
 	daemon.initCgroupsPath(filepath.Dir(path))
 
 	_, root, err := cgroups.FindCgroupMountpointAndRoot("cpu")
@@ -1199,15 +1205,18 @@ func (daemon *Daemon) initCgroupsPath(path string) error {
 
 	path = filepath.Join(root, path)
 	sysinfo := sysinfo.New(true)
-	if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
-		return err
-	}
 	if sysinfo.CPURealtimePeriod && daemon.configStore.CPURealtimePeriod != 0 {
+		if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
+			return err
+		}
 		if err := ioutil.WriteFile(filepath.Join(path, "cpu.rt_period_us"), []byte(strconv.FormatInt(daemon.configStore.CPURealtimePeriod, 10)), 0700); err != nil {
 			return err
 		}
 	}
 	if sysinfo.CPURealtimeRuntime && daemon.configStore.CPURealtimeRuntime != 0 {
+		if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
+			return err
+		}
 		if err := ioutil.WriteFile(filepath.Join(path, "cpu.rt_runtime_us"), []byte(strconv.FormatInt(daemon.configStore.CPURealtimeRuntime, 10)), 0700); err != nil {
 			return err
 		}

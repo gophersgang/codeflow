@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -39,7 +39,7 @@ func (s *DockerSuite) TestCommitWithoutPause(c *check.C) {
 //test commit a paused container should not unpause it after commit
 func (s *DockerSuite) TestCommitPausedContainer(c *check.C) {
 	testRequires(c, DaemonIsLinux)
-	defer unpauseAllContainers(c)
+	defer unpauseAllContainers()
 	out, _ := dockerCmd(c, "run", "-i", "-d", "busybox")
 
 	cleanedContainerID := strings.TrimSpace(out)

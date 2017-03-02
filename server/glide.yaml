@@ -1,4 +1,6 @@
 package: github.com/checkr/codeflow
+ignore:
+- github.com/checkr/codeflow
 import:
 - package: github.com/ant0ine/go-json-rest
   subpackages:
@@ -10,7 +12,7 @@ import:
   - spew
 - package: github.com/dgrijalva/jwt-go
 - package: github.com/docker/docker
-  version: docs-v1.12.0-rc4-2016-07-15-4385-gbf8cdb9
+  version: v1.13.1
   subpackages:
   - pkg/archive
 - package: github.com/extemporalgenome/slug
@@ -23,21 +25,18 @@ import:
   subpackages:
   - jwk
 - package: github.com/libgit2/git2go
-  version: b8a9efd
+  version: v25
 - package: github.com/maxwellhealth/bongo
 - package: github.com/pborman/uuid
 - package: github.com/spf13/cobra
 - package: github.com/spf13/viper
-  version: 5ed0fc3
 - package: golang.org/x/crypto
-  version: 5b4074c
   subpackages:
   - ssh
 - package: gopkg.in/mgo.v2
   subpackages:
   - bson
 - package: k8s.io/client-go
-  version: v2.0.0-alpha.0-23-g24a02a6
   subpackages:
   - kubernetes
   - kubernetes/typed/core/v1
@@ -50,4 +49,3 @@ import:
   - pkg/util/intstr
   - tools/clientcmd
 - package: github.com/ashwanthkumar/slack-go-webhook
-  version: 6174793

@@ -153,7 +153,7 @@ func (rca *RootCA) IssueAndSaveNewCertificates(kw KeyWriter, cn, ou, org string)
 
 // RequestAndSaveNewCertificates gets new certificates issued, either by signing them locally if a signer is
 // available, or by requesting them from the remote server at remoteAddr.
-func (rca *RootCA) RequestAndSaveNewCertificates(ctx context.Context, kw KeyWriter, config CertificateRequestConfig) (*tls.Certificate, error) {
+func (rca *RootCA) RequestAndSaveNewCertificates(ctx context.Context, kw KeyWriter, token string, r remotes.Remotes, transport credentials.TransportCredentials, nodeInfo chan<- api.IssueNodeCertificateResponse) (*tls.Certificate, error) {
 	// Create a new key/pair and CSR
 	csr, key, err := GenerateNewCSR()
 	if err != nil {
@@ -165,7 +165,7 @@ func (rca *RootCA) RequestAndSaveNewCertificates(ctx context.Context, kw KeyWrit
 	// responding properly (for example, it may have just been demoted).
 	var signedCert []byte
 	for i := 0; i != 5; i++ {
-		signedCert, err = GetRemoteSignedCertificate(ctx, csr, rca.Pool, config)
+		signedCert, err = GetRemoteSignedCertificate(ctx, csr, token, rca.Pool, r, transport, nodeInfo)
 		if err == nil {
 			break
 		}
@@ -202,7 +202,7 @@ func (rca *RootCA) RequestAndSaveNewCertificates(ctx context.Context, kw KeyWrit
 
 	var kekUpdate *KEKData
 	for i := 0; i < 5; i++ {
-		kekUpdate, err = rca.getKEKUpdate(ctx, X509Cert, tlsKeyPair, config.Remotes)
+		kekUpdate, err = rca.getKEKUpdate(ctx, X509Cert, tlsKeyPair, r)
 		if err == nil {
 			break
 		}
@@ -545,12 +545,10 @@ func CreateRootCA(rootCN string, paths CertPaths) (RootCA, error) {
 
 // GetRemoteSignedCertificate submits a CSR to a remote CA server address,
 // and that is part of a CA identified by a specific certificate pool.
-func GetRemoteSignedCertificate(ctx context.Context, csr []byte, rootCAPool *x509.CertPool, config CertificateRequestConfig) ([]byte, error) {
+func GetRemoteSignedCertificate(ctx context.Context, csr []byte, token string, rootCAPool *x509.CertPool, r remotes.Remotes, creds credentials.TransportCredentials, nodeInfo chan<- api.IssueNodeCertificateResponse) ([]byte, error) {
 	if rootCAPool == nil {
 		return nil, errors.New("valid root CA pool required")
 	}
-
-	creds := config.Credentials
 
 	if creds == nil {
 		// This is our only non-MTLS request, and it happens when we are boostraping our TLS certs
@@ -558,7 +556,7 @@ func GetRemoteSignedCertificate(ctx context.Context, csr []byte, rootCAPool *x50
 		creds = credentials.NewTLS(&tls.Config{ServerName: CARole, RootCAs: rootCAPool})
 	}
 
-	conn, peer, err := getGRPCConnection(creds, config.Remotes)
+	conn, peer, err := getGRPCConnection(creds, r)
 	if err != nil {
 		return nil, err
 	}
@@ -568,11 +566,16 @@ func GetRemoteSignedCertificate(ctx context.Context, csr []byte, rootCAPool *x50
 	caClient := api.NewNodeCAClient(conn)
 
 	// Send the Request and retrieve the request token
-	issueRequest := &api.IssueNodeCertificateRequest{CSR: csr, Token: config.Token, Availability: config.Availability}
+	issueRequest := &api.IssueNodeCertificateRequest{CSR: csr, Token: token}
 	issueResponse, err := caClient.IssueNodeCertificate(ctx, issueRequest)
 	if err != nil {
-		config.Remotes.Observe(peer, -remotes.DefaultObservationWeight)
+		r.Observe(peer, -remotes.DefaultObservationWeight)
 		return nil, err
+	}
+
+	// Send back the NodeID on the nodeInfo, so the caller can know what ID was assigned by the CA
+	if nodeInfo != nil {
+		nodeInfo <- *issueResponse
 	}
 
 	statusRequest := &api.NodeCertificateStatusRequest{NodeID: issueResponse.NodeID}
@@ -589,7 +592,7 @@ func GetRemoteSignedCertificate(ctx context.Context, csr []byte, rootCAPool *x50
 		defer cancel()
 		statusResponse, err := caClient.NodeCertificateStatus(ctx, statusRequest)
 		if err != nil {
-			config.Remotes.Observe(peer, -remotes.DefaultObservationWeight)
+			r.Observe(peer, -remotes.DefaultObservationWeight)
 			return nil, err
 		}
 
@@ -605,7 +608,7 @@ func GetRemoteSignedCertificate(ctx context.Context, csr []byte, rootCAPool *x50
 			// retry until the certificate gets updated per our
 			// current request.
 			if bytes.Equal(statusResponse.Certificate.CSR, csr) {
-				config.Remotes.Observe(peer, remotes.DefaultObservationWeight)
+				r.Observe(peer, remotes.DefaultObservationWeight)
 				return statusResponse.Certificate.Certificate, nil
 			}
 		}

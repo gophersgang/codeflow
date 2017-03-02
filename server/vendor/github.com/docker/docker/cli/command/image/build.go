@@ -11,13 +11,15 @@ import (
 	"regexp"
 	"runtime"
 
+	"golang.org/x/net/context"
+
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/builder"
 	"github.com/docker/docker/builder/dockerignore"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
-	"github.com/docker/docker/cli/command/image/build"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/fileutils"
@@ -27,9 +29,8 @@ import (
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/docker/reference"
 	runconfigopts "github.com/docker/docker/runconfig/opts"
-	units "github.com/docker/go-units"
+	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 )
 
 type buildOptions struct {
@@ -38,7 +39,7 @@ type buildOptions struct {
 	tags           opts.ListOpts
 	labels         opts.ListOpts
 	buildArgs      opts.ListOpts
-	ulimits        *opts.UlimitOpt
+	ulimits        *runconfigopts.UlimitOpt
 	memory         string
 	memorySwap     string
 	shmSize        string
@@ -66,9 +67,9 @@ func NewBuildCommand(dockerCli *command.DockerCli) *cobra.Command {
 	ulimits := make(map[string]*units.Ulimit)
 	options := buildOptions{
 		tags:      opts.NewListOpts(validateTag),
-		buildArgs: opts.NewListOpts(opts.ValidateEnv),
-		ulimits:   opts.NewUlimitOpt(&ulimits),
-		labels:    opts.NewListOpts(opts.ValidateEnv),
+		buildArgs: opts.NewListOpts(runconfigopts.ValidateEnv),
+		ulimits:   runconfigopts.NewUlimitOpt(&ulimits),
+		labels:    opts.NewListOpts(runconfigopts.ValidateEnv),
 	}
 
 	cmd := &cobra.Command{
@@ -155,13 +156,13 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 
 	switch {
 	case specifiedContext == "-":
-		buildCtx, relDockerfile, err = build.GetContextFromReader(dockerCli.In(), options.dockerfileName)
+		buildCtx, relDockerfile, err = builder.GetContextFromReader(dockerCli.In(), options.dockerfileName)
 	case urlutil.IsGitURL(specifiedContext):
-		tempDir, relDockerfile, err = build.GetContextFromGitURL(specifiedContext, options.dockerfileName)
+		tempDir, relDockerfile, err = builder.GetContextFromGitURL(specifiedContext, options.dockerfileName)
 	case urlutil.IsURL(specifiedContext):
-		buildCtx, relDockerfile, err = build.GetContextFromURL(progBuff, specifiedContext, options.dockerfileName)
+		buildCtx, relDockerfile, err = builder.GetContextFromURL(progBuff, specifiedContext, options.dockerfileName)
 	default:
-		contextDir, relDockerfile, err = build.GetContextFromLocalDir(specifiedContext, options.dockerfileName)
+		contextDir, relDockerfile, err = builder.GetContextFromLocalDir(specifiedContext, options.dockerfileName)
 	}
 
 	if err != nil {
@@ -197,7 +198,7 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 			}
 		}
 
-		if err := build.ValidateContextDirectory(contextDir, excludes); err != nil {
+		if err := builder.ValidateContextDirectory(contextDir, excludes); err != nil {
 			return fmt.Errorf("Error checking context: '%s'.", err)
 		}
 

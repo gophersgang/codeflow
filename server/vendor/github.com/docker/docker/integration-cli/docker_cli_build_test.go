@@ -18,11 +18,10 @@ import (
 	"time"
 
 	"github.com/docker/docker/builder/dockerfile/command"
-	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/integration/checker"
+	icmd "github.com/docker/docker/pkg/integration/cmd"
 	"github.com/docker/docker/pkg/stringutils"
-	"github.com/docker/docker/pkg/testutil"
-	icmd "github.com/docker/docker/pkg/testutil/cmd"
 	"github.com/go-check/check"
 )
 
@@ -2086,7 +2085,7 @@ func (s *DockerSuite) TestBuildContextCleanup(c *check.C) {
 	if err != nil {
 		c.Fatalf("failed to list contents of tmp dir: %s", err)
 	}
-	if err = testutil.CompareDirectoryEntries(entries, entriesFinal); err != nil {
+	if err = compareDirectoryEntries(entries, entriesFinal); err != nil {
 		c.Fatalf("context should have been deleted, but wasn't")
 	}
 
@@ -2111,7 +2110,7 @@ func (s *DockerSuite) TestBuildContextCleanupFailedBuild(c *check.C) {
 	if err != nil {
 		c.Fatalf("failed to list contents of tmp dir: %s", err)
 	}
-	if err = testutil.CompareDirectoryEntries(entries, entriesFinal); err != nil {
+	if err = compareDirectoryEntries(entries, entriesFinal); err != nil {
 		c.Fatalf("context should have been deleted, but wasn't")
 	}
 
@@ -5342,7 +5341,7 @@ func (s *DockerSuite) TestBuildContainerWithCgroupParent(c *check.C) {
 	if err != nil {
 		c.Fatalf("failed to read '/proc/self/cgroup - %v", err)
 	}
-	selfCgroupPaths := testutil.ParseCgroupPaths(string(data))
+	selfCgroupPaths := parseCgroupPaths(string(data))
 	_, found := selfCgroupPaths["memory"]
 	if !found {
 		c.Fatalf("unable to find self memory cgroup path. CgroupsPath: %v", selfCgroupPaths)
@@ -6243,10 +6242,11 @@ func (s *DockerSuite) TestBuildMultipleTags(c *check.C) {
 	FROM busybox
 	MAINTAINER test-15780
 	`
-	icmd.RunCmd(icmd.Cmd{
-		Command: []string{dockerBinary, "build", "-t", "tag1", "-t", "tag2:v2", "-t", "tag1:latest", "-t", "tag1", "--no-cache", "-"},
-		Stdin:   strings.NewReader(dockerfile),
-	}).Assert(c, icmd.Success)
+	cmd := exec.Command(dockerBinary, "build", "-t", "tag1", "-t", "tag2:v2",
+		"-t", "tag1:latest", "-t", "tag1", "--no-cache", "-")
+	cmd.Stdin = strings.NewReader(dockerfile)
+	_, err := runCommand(cmd)
+	c.Assert(err, check.IsNil)
 
 	id1, err := getIDByName("tag1")
 	c.Assert(err, check.IsNil)
@@ -6580,7 +6580,7 @@ func (s *DockerSuite) TestBuildLabelOverwrite(c *check.C) {
 }
 
 func (s *DockerRegistryAuthHtpasswdSuite) TestBuildFromAuthenticatedRegistry(c *check.C) {
-	dockerCmd(c, "login", "-u", s.reg.Username(), "-p", s.reg.Password(), privateRegistryURL)
+	dockerCmd(c, "login", "-u", s.reg.username, "-p", s.reg.password, privateRegistryURL)
 
 	baseImage := privateRegistryURL + "/baseimage"
 
@@ -6625,7 +6625,7 @@ func (s *DockerRegistryAuthHtpasswdSuite) TestBuildWithExternalAuth(c *check.C) 
 	err = ioutil.WriteFile(configPath, []byte(externalAuthConfig), 0644)
 	c.Assert(err, checker.IsNil)
 
-	dockerCmd(c, "--config", tmp, "login", "-u", s.reg.Username(), "-p", s.reg.Password(), privateRegistryURL)
+	dockerCmd(c, "--config", tmp, "login", "-u", s.reg.username, "-p", s.reg.password, privateRegistryURL)
 
 	b, err := ioutil.ReadFile(configPath)
 	c.Assert(err, checker.IsNil)
@@ -7043,17 +7043,6 @@ func (s *DockerSuite) TestBuildCmdShellArgsEscaped(c *check.C) {
 	}
 }
 
-func (s *DockerSuite) TestContinueCharSpace(c *check.C) {
-	// Test to make sure that we don't treat a \ as a continuation
-	// character IF there are spaces (or tabs) after it on the same line
-	name := "testbuildcont"
-	_, err := buildImage(name, "FROM busybox\nRUN echo hi \\\t\nbye", true)
-	c.Assert(err, check.NotNil, check.Commentf("Build 1 should fail - didn't"))
-
-	_, err = buildImage(name, "FROM busybox\nRUN echo hi \\ \nbye", true)
-	c.Assert(err, check.NotNil, check.Commentf("Build 2 should fail - didn't"))
-}
-
 // Test case for #24912.
 func (s *DockerSuite) TestBuildStepsWithProgress(c *check.C) {
 	name := "testbuildstepswithprogress"
@@ -7386,14 +7375,18 @@ LABEL a=b
 	c.Assert(strings.TrimSpace(out), checker.Equals, `["sh"]`)
 }
 
-// Test case for 28902/28909
+// Test case for 28902/28090
 func (s *DockerSuite) TestBuildWorkdirCmd(c *check.C) {
 	testRequires(c, DaemonIsLinux)
 
 	dockerFile := `
-                FROM busybox
+                FROM golang:1.7-alpine
                 WORKDIR /
                 `
-	_, err := buildImage("testbuildworkdircmd", dockerFile, false)
+	_, err := buildImage("testbuildworkdircmd", dockerFile, true)
 	c.Assert(err, checker.IsNil)
+
+	_, out, err := buildImageWithOut("testbuildworkdircmd", dockerFile, true)
+	c.Assert(err, checker.IsNil)
+	c.Assert(strings.Count(out, "Using cache"), checker.Equals, 1)
 }

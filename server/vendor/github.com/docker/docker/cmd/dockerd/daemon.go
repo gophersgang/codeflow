@@ -26,9 +26,8 @@ import (
 	systemrouter "github.com/docker/docker/api/server/router/system"
 	"github.com/docker/docker/api/server/router/volume"
 	"github.com/docker/docker/builder/dockerfile"
-	cliconfig "github.com/docker/docker/cli/config"
-	"github.com/docker/docker/cli/debug"
 	cliflags "github.com/docker/docker/cli/flags"
+	"github.com/docker/docker/cliconfig"
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/daemon/cluster"
 	"github.com/docker/docker/daemon/logger"
@@ -44,6 +43,7 @@ import (
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
+	"github.com/docker/docker/utils"
 	"github.com/docker/go-connections/tlsconfig"
 	"github.com/spf13/pflag"
 )
@@ -75,7 +75,7 @@ func migrateKey(config *daemon.Config) (err error) {
 	}
 
 	// Migrate trust key if exists at ~/.docker/key.json and owned by current user
-	oldPath := filepath.Join(cliconfig.Dir(), cliflags.DefaultTrustKeyFile)
+	oldPath := filepath.Join(cliconfig.ConfigDir(), cliflags.DefaultTrustKeyFile)
 	newPath := filepath.Join(getDaemonConfDir(config.Root), cliflags.DefaultTrustKeyFile)
 	if _, statErr := os.Stat(newPath); os.IsNotExist(statErr) && currentUserIsOwner(oldPath) {
 		defer func() {
@@ -136,7 +136,7 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 	}
 
 	if cli.Config.Debug {
-		debug.Enable()
+		utils.EnableDebug()
 	}
 
 	if cli.Config.Experimental {
@@ -226,7 +226,7 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 
 		// It's a bad idea to bind to TCP without tlsverify.
 		if proto == "tcp" && (serverConfig.TLSConfig == nil || serverConfig.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert) {
-			logrus.Warn("[!] DON'T BIND ON ANY IP ADDRESS WITHOUT setting --tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING [!]")
+			logrus.Warn("[!] DON'T BIND ON ANY IP ADDRESS WITHOUT setting -tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING [!]")
 		}
 		ls, err := listeners.Init(proto, addr, serverConfig.SocketGroup, serverConfig.TLSConfig)
 		if err != nil {
@@ -350,13 +350,13 @@ func (cli *DaemonCli) reloadConfig() {
 		}
 
 		if config.IsValueSet("debug") {
-			debugEnabled := debug.IsEnabled()
+			debugEnabled := utils.IsDebugEnabled()
 			switch {
 			case debugEnabled && !config.Debug: // disable debug
-				debug.Disable()
+				utils.DisableDebug()
 				cli.api.DisableProfiler()
 			case config.Debug && !debugEnabled: // enable debug
-				debug.Enable()
+				utils.EnableDebug()
 				cli.api.EnableProfiler()
 			}
 
@@ -487,7 +487,7 @@ func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
 		}
 	}
 
-	s.InitRouter(debug.IsEnabled(), routers...)
+	s.InitRouter(utils.IsDebugEnabled(), routers...)
 }
 
 func (cli *DaemonCli) initMiddlewares(s *apiserver.Server, cfg *apiserver.Config) error {

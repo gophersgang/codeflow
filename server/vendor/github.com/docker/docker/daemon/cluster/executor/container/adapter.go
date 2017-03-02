@@ -3,9 +3,9 @@ package container
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -239,7 +239,7 @@ func (c *containerAdapter) create(ctx context.Context) error {
 
 	container := c.container.task.Spec.GetContainer()
 	if container == nil {
-		return errors.New("unable to get container from task spec")
+		return fmt.Errorf("unable to get container from task spec")
 	}
 
 	// configure secrets
@@ -259,7 +259,28 @@ func (c *containerAdapter) create(ctx context.Context) error {
 	return nil
 }
 
+// checkMounts ensures that the provided mounts won't have any host-specific
+// problems at start up. For example, we disallow bind mounts without an
+// existing path, which slightly different from the container API.
+func (c *containerAdapter) checkMounts() error {
+	spec := c.container.spec()
+	for _, mount := range spec.Mounts {
+		switch mount.Type {
+		case api.MountTypeBind:
+			if _, err := os.Stat(mount.Source); os.IsNotExist(err) {
+				return fmt.Errorf("invalid bind mount source, source path not found: %s", mount.Source)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (c *containerAdapter) start(ctx context.Context) error {
+	if err := c.checkMounts(); err != nil {
+		return err
+	}
+
 	return c.backend.ContainerStart(c.container.name(), nil, "", "")
 }
 
@@ -402,7 +423,7 @@ func (c *containerAdapter) logs(ctx context.Context, options api.LogSubscription
 		// See protobuf documentation for details of how this works.
 		apiOptions.Tail = fmt.Sprint(-options.Tail - 1)
 	} else if options.Tail > 0 {
-		return nil, errors.New("tail relative to start of logs not supported via docker API")
+		return nil, fmt.Errorf("tail relative to start of logs not supported via docker API")
 	}
 
 	if len(options.Streams) == 0 {

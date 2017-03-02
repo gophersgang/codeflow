@@ -41,9 +41,8 @@ $ ls -ls /home/pluginDir
 $ docker plugin create plugin /home/pluginDir
 plugin
 
-$ docker plugin ls
-ID                  NAME                TAG                 DESCRIPTION                  ENABLED
-672d8144ec02        plugin              latest              A sample plugin for Docker   false
+NAME                  	TAG                 DESCRIPTION                  ENABLED
+plugin                  latest              A sample plugin for Docker   true
 ```
 
 The plugin can subsequently be enabled for local use or pushed to the public registry.
@@ -58,3 +57,4 @@ The plugin can subsequently be enabled for local use or pushed to the public reg
 * [plugin push](plugin_push.md)
 * [plugin rm](plugin_rm.md)
 * [plugin set](plugin_set.md)
+* [plugin upgrade](plugin_upgrade.md)

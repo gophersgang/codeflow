@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/pkg/homedir"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/sysinfo"
@@ -71,7 +71,9 @@ func (s *DockerSuite) TestRunWithVolumesIsRecursive(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	defer f.Close()
 
-	out, _ := dockerCmd(c, "run", "--name", "test-data", "--volume", fmt.Sprintf("%s:/tmp:ro", tmpDir), "busybox:latest", "ls", "/tmp/tmpfs")
+	runCmd := exec.Command(dockerBinary, "run", "--name", "test-data", "--volume", fmt.Sprintf("%s:/tmp:ro", tmpDir), "busybox:latest", "ls", "/tmp/tmpfs")
+	out, _, _, err := runCommandWithStdoutStderr(runCmd)
+	c.Assert(err, checker.IsNil)
 	c.Assert(out, checker.Contains, filepath.Base(f.Name()), check.Commentf("Recursive bind mount test failed. Expected file not found"))
 }
 
@@ -1447,7 +1449,8 @@ func (s *DockerSuite) TestRunUserDeviceAllowed(c *check.C) {
 func (s *DockerDaemonSuite) TestRunSeccompJSONNewFormat(c *check.C) {
 	testRequires(c, SameHostDaemon, seccompEnabled)
 
-	s.d.StartWithBusybox(c)
+	err := s.d.StartWithBusybox()
+	c.Assert(err, check.IsNil)
 
 	jsonData := `{
 	"defaultAction": "SCMP_ACT_ALLOW",
@@ -1472,7 +1475,8 @@ func (s *DockerDaemonSuite) TestRunSeccompJSONNewFormat(c *check.C) {
 func (s *DockerDaemonSuite) TestRunSeccompJSONNoNameAndNames(c *check.C) {
 	testRequires(c, SameHostDaemon, seccompEnabled)
 
-	s.d.StartWithBusybox(c)
+	err := s.d.StartWithBusybox()
+	c.Assert(err, check.IsNil)
 
 	jsonData := `{
 	"defaultAction": "SCMP_ACT_ALLOW",
@@ -1498,7 +1502,8 @@ func (s *DockerDaemonSuite) TestRunSeccompJSONNoNameAndNames(c *check.C) {
 func (s *DockerDaemonSuite) TestRunSeccompJSONNoArchAndArchMap(c *check.C) {
 	testRequires(c, SameHostDaemon, seccompEnabled)
 
-	s.d.StartWithBusybox(c)
+	err := s.d.StartWithBusybox()
+	c.Assert(err, check.IsNil)
 
 	jsonData := `{
 	"archMap": [
@@ -1535,10 +1540,11 @@ func (s *DockerDaemonSuite) TestRunSeccompJSONNoArchAndArchMap(c *check.C) {
 func (s *DockerDaemonSuite) TestRunWithDaemonDefaultSeccompProfile(c *check.C) {
 	testRequires(c, SameHostDaemon, seccompEnabled)
 
-	s.d.StartWithBusybox(c)
+	err := s.d.StartWithBusybox()
+	c.Assert(err, check.IsNil)
 
 	// 1) verify I can run containers with the Docker default shipped profile which allows chmod
-	_, err := s.d.Cmd("run", "busybox", "chmod", "777", ".")
+	_, err = s.d.Cmd("run", "busybox", "chmod", "777", ".")
 	c.Assert(err, check.IsNil)
 
 	jsonData := `{
@@ -1557,7 +1563,8 @@ func (s *DockerDaemonSuite) TestRunWithDaemonDefaultSeccompProfile(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// 2) restart the daemon and add a custom seccomp profile in which we deny chmod
-	s.d.Restart(c, "--seccomp-profile="+tmpFile.Name())
+	err = s.d.Restart("--seccomp-profile=" + tmpFile.Name())
+	c.Assert(err, check.IsNil)
 
 	out, err := s.d.Cmd("run", "busybox", "chmod", "777", ".")
 	c.Assert(err, check.NotNil)

@@ -21,11 +21,11 @@ import (
 	containertypes "github.com/docker/docker/api/types/container"
 	mounttypes "github.com/docker/docker/api/types/mount"
 	networktypes "github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/pkg/testutil"
 	"github.com/docker/docker/volume"
 	"github.com/go-check/check"
 )
@@ -215,7 +215,7 @@ func (s *DockerSuite) TestGetContainerStatsRmRunning(c *check.C) {
 	out, _ := runSleepingContainer(c)
 	id := strings.TrimSpace(out)
 
-	buf := &testutil.ChannelBuffer{make(chan []byte, 1)}
+	buf := &integration.ChannelBuffer{make(chan []byte, 1)}
 	defer buf.Close()
 
 	_, body, err := sockRequestRaw("GET", "/containers/"+id+"/stats?stream=1", nil, "application/json")
@@ -346,7 +346,7 @@ func (s *DockerSuite) TestGetStoppedContainerStats(c *check.C) {
 func (s *DockerSuite) TestContainerAPIPause(c *check.C) {
 	// Problematic on Windows as Windows does not support pause
 	testRequires(c, DaemonIsLinux)
-	defer unpauseAllContainers(c)
+	defer unpauseAllContainers()
 	out, _ := dockerCmd(c, "run", "-d", "busybox", "sleep", "30")
 	ContainerID := strings.TrimSpace(out)
 
@@ -354,7 +354,7 @@ func (s *DockerSuite) TestContainerAPIPause(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusNoContent)
 
-	pausedContainers, err := getPausedContainers()
+	pausedContainers, err := getSliceOfPausedContainers()
 	c.Assert(err, checker.IsNil, check.Commentf("error thrown while checking if containers were paused"))
 
 	if len(pausedContainers) != 1 || stringid.TruncateID(ContainerID) != pausedContainers[0] {
@@ -365,9 +365,9 @@ func (s *DockerSuite) TestContainerAPIPause(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusNoContent)
 
-	pausedContainers, err = getPausedContainers()
+	pausedContainers, err = getSliceOfPausedContainers()
 	c.Assert(err, checker.IsNil, check.Commentf("error thrown while checking if containers were paused"))
-	c.Assert(pausedContainers, checker.HasLen, 0, check.Commentf("There should be no paused container."))
+	c.Assert(pausedContainers, checker.IsNil, check.Commentf("There should be no paused container."))
 }
 
 func (s *DockerSuite) TestContainerAPITop(c *check.C) {
@@ -723,7 +723,7 @@ func (s *DockerSuite) TestContainerAPIInvalidPortSyntax(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
 
-	b, err := testutil.ReadBody(body)
+	b, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 	c.Assert(string(b[:]), checker.Contains, "invalid port")
 }
@@ -743,7 +743,7 @@ func (s *DockerSuite) TestContainerAPIRestartPolicyInvalidPolicyName(c *check.C)
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
 
-	b, err := testutil.ReadBody(body)
+	b, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 	c.Assert(string(b[:]), checker.Contains, "invalid restart policy")
 }
@@ -763,7 +763,7 @@ func (s *DockerSuite) TestContainerAPIRestartPolicyRetryMismatch(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
 
-	b, err := testutil.ReadBody(body)
+	b, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 	c.Assert(string(b[:]), checker.Contains, "maximum retry count cannot be used with restart policy")
 }
@@ -783,7 +783,7 @@ func (s *DockerSuite) TestContainerAPIRestartPolicyNegativeRetryCount(c *check.C
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
 
-	b, err := testutil.ReadBody(body)
+	b, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 	c.Assert(string(b[:]), checker.Contains, "maximum retry count cannot be negative")
 }
@@ -834,7 +834,7 @@ func (s *DockerSuite) TestContainerAPIPostCreateNull(c *check.C) {
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusCreated)
 
-	b, err := testutil.ReadBody(body)
+	b, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 	type createResp struct {
 		ID string
@@ -863,7 +863,7 @@ func (s *DockerSuite) TestCreateWithTooLowMemoryLimit(c *check.C) {
 
 	res, body, err := sockRequestRaw("POST", "/containers/create", strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
-	b, err2 := testutil.ReadBody(body)
+	b, err2 := readBody(body)
 	c.Assert(err2, checker.IsNil)
 
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
@@ -1291,7 +1291,7 @@ func (s *DockerSuite) TestPutContainerArchiveErrSymlinkInVolumeToReadOnlyRootfs(
 		readOnly: true,
 		volumes:  defaultVolumes(testVol), // Our bind mount is at /vol2
 	})
-	defer deleteContainer(false, cID)
+	defer deleteContainer(cID)
 
 	// Attempt to extract to a symlink in the volume which points to a
 	// directory outside the volume. This should cause an error because the
@@ -1665,7 +1665,7 @@ func (s *DockerSuite) TestContainersAPICreateMountsValidation(c *check.C) {
 		},
 	}
 
-	if SameHostDaemon() {
+	if SameHostDaemon.Condition() {
 		tmpDir, err := ioutils.TempDir("", "test-mounts-api")
 		c.Assert(err, checker.IsNil)
 		defer os.RemoveAll(tmpDir)
@@ -1696,7 +1696,7 @@ func (s *DockerSuite) TestContainersAPICreateMountsValidation(c *check.C) {
 		}...)
 	}
 
-	if DaemonIsLinux() {
+	if DaemonIsLinux.Condition() {
 		cases = append(cases, []testCase{
 			{
 				config: cfg{
@@ -1823,7 +1823,7 @@ func (s *DockerSuite) TestContainersAPICreateMountsCreate(c *check.C) {
 		{mounttypes.Mount{Type: "volume", Target: destPath, Source: "test3", VolumeOptions: &mounttypes.VolumeOptions{DriverConfig: &mounttypes.Driver{Name: volume.DefaultDriverName}}}, types.MountPoint{Driver: volume.DefaultDriverName, Type: "volume", Name: "test3", RW: true, Destination: destPath}},
 	}
 
-	if SameHostDaemon() {
+	if SameHostDaemon.Condition() {
 		// setup temp dir for testing binds
 		tmpDir1, err := ioutil.TempDir("", "test-mounts-api-1")
 		c.Assert(err, checker.IsNil)
@@ -1834,7 +1834,7 @@ func (s *DockerSuite) TestContainersAPICreateMountsCreate(c *check.C) {
 		}...)
 
 		// for modes only supported on Linux
-		if DaemonIsLinux() {
+		if DaemonIsLinux.Condition() {
 			tmpDir3, err := ioutils.TempDir("", "test-mounts-api-3")
 			c.Assert(err, checker.IsNil)
 			defer os.RemoveAll(tmpDir3)

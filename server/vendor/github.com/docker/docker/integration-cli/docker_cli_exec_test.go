@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/integration-cli/checker"
-	icmd "github.com/docker/docker/pkg/testutil/cmd"
+	"github.com/docker/docker/pkg/integration/checker"
+	icmd "github.com/docker/docker/pkg/integration/cmd"
 	"github.com/go-check/check"
 )
 
@@ -81,13 +81,17 @@ func (s *DockerSuite) TestExecAfterContainerRestart(c *check.C) {
 
 func (s *DockerDaemonSuite) TestExecAfterDaemonRestart(c *check.C) {
 	// TODO Windows CI: Requires a little work to get this ported.
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-	s.d.StartWithBusybox(c)
+	testRequires(c, DaemonIsLinux)
+	testRequires(c, SameHostDaemon)
+
+	err := s.d.StartWithBusybox()
+	c.Assert(err, checker.IsNil)
 
 	out, err := s.d.Cmd("run", "-d", "--name", "top", "-p", "80", "busybox:latest", "top")
 	c.Assert(err, checker.IsNil, check.Commentf("Could not run top: %s", out))
 
-	s.d.Restart(c)
+	err = s.d.Restart()
+	c.Assert(err, checker.IsNil, check.Commentf("Could not restart daemon"))
 
 	out, err = s.d.Cmd("start", "top")
 	c.Assert(err, checker.IsNil, check.Commentf("Could not start top after daemon restart: %s", out))
@@ -135,7 +139,7 @@ func (s *DockerSuite) TestExecExitStatus(c *check.C) {
 
 func (s *DockerSuite) TestExecPausedContainer(c *check.C) {
 	testRequires(c, IsPausable)
-	defer unpauseAllContainers(c)
+	defer unpauseAllContainers()
 
 	out, _ := runSleepingContainer(c, "-d", "--name", "testing")
 	ContainerID := strings.TrimSpace(out)
@@ -206,7 +210,6 @@ func (s *DockerSuite) TestExecTTYWithoutStdin(c *check.C) {
 	}
 }
 
-// FIXME(vdemeester) this should be a unit tests on cli/command/container package
 func (s *DockerSuite) TestExecParseError(c *check.C) {
 	// TODO Windows CI: Requires some extra work. Consider copying the
 	// runSleepingContainer helper to have an exec version.
@@ -214,11 +217,10 @@ func (s *DockerSuite) TestExecParseError(c *check.C) {
 	dockerCmd(c, "run", "-d", "--name", "top", "busybox", "top")
 
 	// Test normal (non-detached) case first
-	icmd.RunCommand(dockerBinary, "exec", "top").Assert(c, icmd.Expected{
-		ExitCode: 1,
-		Error:    "exit status 1",
-		Err:      "See 'docker exec --help'",
-	})
+	cmd := exec.Command(dockerBinary, "exec", "top")
+	_, stderr, _, err := runCommandWithStdoutStderr(cmd)
+	c.Assert(err, checker.NotNil)
+	c.Assert(stderr, checker.Contains, "See 'docker exec --help'")
 }
 
 func (s *DockerSuite) TestExecStopNotHanging(c *check.C) {
@@ -386,7 +388,7 @@ func (s *DockerSuite) TestRunMutableNetworkFiles(c *check.C) {
 	// Not applicable on Windows to Windows CI.
 	testRequires(c, SameHostDaemon, DaemonIsLinux)
 	for _, fn := range []string{"resolv.conf", "hosts"} {
-		deleteAllContainers(c)
+		deleteAllContainers()
 
 		content, err := runCommandAndReadContainerFile(fn, exec.Command(dockerBinary, "run", "-d", "--name", "c1", "busybox", "sh", "-c", fmt.Sprintf("echo success >/etc/%s && top", fn)))
 		c.Assert(err, checker.IsNil)

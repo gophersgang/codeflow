@@ -20,7 +20,7 @@ const allowV1PluginsFallback bool = true
 
 /* defaultAPIVersion is the version of the plugin API for volume, network,
    IPAM and authz. This is a very stable API. When we update this API, then
-   pluginType should include a version. e.g. "networkdriver/2.0".
+   pluginType should include a version. eg "networkdriver/2.0".
 */
 const defaultAPIVersion string = "1.0"
 
@@ -36,7 +36,7 @@ func (name ErrAmbiguous) Error() string {
 	return fmt.Sprintf("multiple plugins found for %q", string(name))
 }
 
-// GetV2Plugin retrieves a plugin by name, id or partial ID.
+// GetV2Plugin retreives a plugin by name, id or partial ID.
 func (ps *Store) GetV2Plugin(refOrID string) (*v2.Plugin, error) {
 	ps.RLock()
 	defer ps.RUnlock()
@@ -64,7 +64,7 @@ func (ps *Store) validateName(name string) error {
 	return nil
 }
 
-// GetAll retrieves all plugins.
+// GetAll retreives all plugins.
 func (ps *Store) GetAll() map[string]*v2.Plugin {
 	ps.RLock()
 	defer ps.RUnlock()

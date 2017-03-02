@@ -775,7 +775,11 @@ func (d *Driver) resolveID(id string) (string, error) {
 
 // setID stores the layerId in disk.
 func (d *Driver) setID(id, altID string) error {
-	return ioutil.WriteFile(filepath.Join(d.dir(id), "layerId"), []byte(altID), 0600)
+	err := ioutil.WriteFile(filepath.Join(d.dir(id), "layerId"), []byte(altID), 0600)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // getLayerChain returns the layer chain information.

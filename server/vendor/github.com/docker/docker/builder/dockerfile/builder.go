@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -204,28 +203,6 @@ func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
 	return repoAndTags, nil
 }
 
-func (b *Builder) processLabels() error {
-	if len(b.options.Labels) == 0 {
-		return nil
-	}
-
-	var labels []string
-	for k, v := range b.options.Labels {
-		labels = append(labels, fmt.Sprintf("%q='%s'", k, v))
-	}
-	// Sort the label to have a repeatable order
-	sort.Strings(labels)
-
-	line := "LABEL " + strings.Join(labels, " ")
-	_, node, err := parser.ParseLine(line, &b.directive, false)
-	if err != nil {
-		return err
-	}
-	b.dockerfile.Children = append(b.dockerfile.Children, node)
-
-	return nil
-}
-
 // build runs the Dockerfile builder from a context and a docker object that allows to make calls
 // to Docker.
 //
@@ -256,8 +233,16 @@ func (b *Builder) build(stdout io.Writer, stderr io.Writer, out io.Writer) (stri
 		return "", err
 	}
 
-	if err := b.processLabels(); err != nil {
-		return "", err
+	if len(b.options.Labels) > 0 {
+		line := "LABEL "
+		for k, v := range b.options.Labels {
+			line += fmt.Sprintf("%q='%s' ", k, v)
+		}
+		_, node, err := parser.ParseLine(line, &b.directive, false)
+		if err != nil {
+			return "", err
+		}
+		b.dockerfile.Children = append(b.dockerfile.Children, node)
 	}
 
 	var shortImgID string
@@ -272,8 +257,8 @@ func (b *Builder) build(stdout io.Writer, stderr io.Writer, out io.Writer) (stri
 		select {
 		case <-b.clientCtx.Done():
 			logrus.Debug("Builder: build cancelled!")
-			fmt.Fprint(b.Stdout, "Build cancelled")
-			return "", errors.New("Build cancelled")
+			fmt.Fprintf(b.Stdout, "Build cancelled")
+			return "", fmt.Errorf("Build cancelled")
 		default:
 			// Not cancelled yet, keep going...
 		}
@@ -306,7 +291,7 @@ func (b *Builder) build(stdout io.Writer, stderr io.Writer, out io.Writer) (stri
 	}
 
 	if b.image == "" {
-		return "", errors.New("No image was generated. Is your Dockerfile empty?")
+		return "", fmt.Errorf("No image was generated. Is your Dockerfile empty?")
 	}
 
 	if b.options.Squash {

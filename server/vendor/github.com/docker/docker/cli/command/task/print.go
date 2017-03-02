@@ -70,7 +70,11 @@ func Print(dockerCli *command.DockerCli, ctx context.Context, tasks []swarm.Task
 	defer writer.Flush()
 	fmt.Fprintln(writer, strings.Join([]string{"ID", "NAME", "IMAGE", "NODE", "DESIRED STATE", "CURRENT STATE", "ERROR", "PORTS"}, "\t"))
 
-	return print(writer, ctx, tasks, resolver, noTrunc)
+	if err := print(writer, ctx, tasks, resolver, noTrunc); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // PrintQuiet shows task list in a quiet way.

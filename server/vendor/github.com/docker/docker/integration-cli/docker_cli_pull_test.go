@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/digest"
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -110,7 +110,7 @@ func (s *DockerHubPullSuite) TestPullNonExistingImage(c *check.C) {
 }
 
 // TestPullFromCentralRegistryImplicitRefParts pulls an image from the central registry and verifies
-// that pulling the same image with different combinations of implicit elements of the image
+// that pulling the same image with different combinations of implicit elements of the the image
 // reference (tag, repository, central registry url, ...) doesn't trigger a new pull nor leads to
 // multiple images.
 func (s *DockerHubPullSuite) TestPullFromCentralRegistryImplicitRefParts(c *check.C) {

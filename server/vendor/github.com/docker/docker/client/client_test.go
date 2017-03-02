@@ -102,11 +102,11 @@ func TestNewEnvClient(t *testing.T) {
 			// pedantic checking that this is handled correctly
 			tr := apiclient.client.Transport.(*http.Transport)
 			if tr.TLSClientConfig == nil {
-				t.Error("no TLS config found when DOCKER_TLS_VERIFY enabled")
+				t.Errorf("no tls config found when DOCKER_TLS_VERIFY enabled")
 			}
 
 			if tr.TLSClientConfig.InsecureSkipVerify {
-				t.Error("TLS verification should be enabled")
+				t.Errorf("tls verification should be enabled")
 			}
 		}
 

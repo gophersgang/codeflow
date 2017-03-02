@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -18,7 +18,7 @@ func (s *DockerSwarmSuite) TestSwarmVolumePlugin(c *check.C) {
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
 	// Make sure task stays pending before plugin is available
-	waitAndAssert(c, defaultReconciliationTimeout, d.CheckServiceTasksInState("top", swarm.TaskStatePending, "missing plugin on 1 node"), checker.Equals, 1)
+	waitAndAssert(c, defaultReconciliationTimeout, d.checkServiceTasksInState("top", swarm.TaskStatePending, "missing plugin on 1 node"), checker.Equals, 1)
 
 	plugin := newVolumePlugin(c, "customvolumedriver")
 	defer plugin.Close()
@@ -31,7 +31,7 @@ func (s *DockerSwarmSuite) TestSwarmVolumePlugin(c *check.C) {
 	// this long delay.
 
 	// make sure task has been deployed.
-	waitAndAssert(c, defaultReconciliationTimeout, d.CheckActiveContainerCount, checker.Equals, 1)
+	waitAndAssert(c, defaultReconciliationTimeout, d.checkActiveContainerCount, checker.Equals, 1)
 
 	out, err = d.Cmd("ps", "-q")
 	c.Assert(err, checker.IsNil)

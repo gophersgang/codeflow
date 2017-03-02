@@ -195,7 +195,10 @@ func saveMappings(root string, mappings map[string]image.ID) error {
 		return err
 	}
 	defer f.Close()
-	return json.NewEncoder(f).Encode(mappings)
+	if err := json.NewEncoder(f).Encode(mappings); err != nil {
+		return err
+	}
+	return nil
 }
 
 func migrateImages(root string, ls graphIDRegistrar, is image.Store, ms metadata.Store, mappings map[string]image.ID) error {

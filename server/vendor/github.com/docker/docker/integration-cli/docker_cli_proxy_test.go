@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -40,7 +40,8 @@ func (s *DockerDaemonSuite) TestCLIProxyProxyTCPSock(c *check.C) {
 
 	c.Assert(ip, checker.Not(checker.Equals), "")
 
-	s.d.Start(c, "-H", "tcp://"+ip+":2375")
+	err = s.d.Start("-H", "tcp://"+ip+":2375")
+	c.Assert(err, checker.IsNil)
 	cmd := exec.Command(dockerBinary, "info")
 	cmd.Env = []string{"DOCKER_HOST=tcp://" + ip + ":2375", "HTTP_PROXY=127.0.0.1:9999"}
 	out, _, err := runCommandWithOutput(cmd)

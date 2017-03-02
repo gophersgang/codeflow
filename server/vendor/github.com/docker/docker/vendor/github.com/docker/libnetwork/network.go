@@ -871,9 +871,8 @@ func (n *network) addEndpoint(ep *endpoint) error {
 
 func (n *network) CreateEndpoint(name string, options ...EndpointOption) (Endpoint, error) {
 	var err error
-
-	if err = config.ValidateName(name); err != nil {
-		return nil, ErrInvalidName(err.Error())
+	if !config.IsValidName(name) {
+		return nil, ErrInvalidName(name)
 	}
 
 	if _, err = n.EndpointByName(name); err == nil {
@@ -1637,7 +1636,9 @@ func (n *network) ResolveName(req string, ipType int) ([]net.IP, bool) {
 	n.Unlock()
 
 	if ip != nil {
-		return ip, false
+		ipLocal := make([]net.IP, len(ip))
+		copy(ipLocal, ip)
+		return ipLocal, false
 	}
 
 	return nil, ipv6Miss

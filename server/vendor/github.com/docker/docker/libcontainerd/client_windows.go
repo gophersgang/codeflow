@@ -15,7 +15,7 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/sysinfo"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 type client struct {
@@ -396,12 +396,10 @@ func (clnt *client) Signal(containerID string, sig int) error {
 			}
 		}
 	} else {
-		// Shut down the container
-		if err := cont.hcsContainer.Shutdown(); err != nil {
-			if !hcsshim.IsPending(err) && !hcsshim.IsAlreadyStopped(err) {
-				// ignore errors
-				logrus.Warnf("libcontainerd: failed to shutdown container %s: %q", containerID, err)
-			}
+		// Terminate Process
+		if err := cont.hcsProcess.Kill(); err != nil && !hcsshim.IsAlreadyStopped(err) {
+			// ignore errors
+			logrus.Warnf("libcontainerd: failed to terminate pid %d in %s: %q", cont.systemPid, containerID, err)
 		}
 	}
 

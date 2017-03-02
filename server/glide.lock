@@ -1,5 +1,5 @@
-hash: b85da683a3b7b567c6f1f3bc0563db416977b027cb43af3a1637b4bbcca8b87a
-updated: 2017-02-10T14:58:31.172954242-08:00
+hash: 28bdb10287683c89bffb00e29e09c1b7a01680111a300bbcd48c9e18d65500e9
+updated: 2017-03-02T09:39:20.902216708-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -50,7 +50,7 @@ imports:
   - digest
   - reference
 - name: github.com/docker/docker
-  version: bf8cdb9172c3516eecb80974971b0b2da00afc11
+  version: 092cba3727bb9b4a2f0e922cd6c0f93ea270e363
   subpackages:
   - api/types
   - api/types/blkiodev
@@ -163,7 +163,7 @@ imports:
   - jwa
   - jwk
 - name: github.com/libgit2/git2go
-  version: b8a9efd21f5ea094976ff2c53c4aec1cf6014876
+  version: 334260d743d713a55ff3c097ec6707f2bb39e9d5
 - name: github.com/magiconair/properties
   version: b3b15ef068fd0b17ddf408a23669f20811d194d2
 - name: github.com/mailru/easyjson
@@ -222,11 +222,9 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/crypto
-  version: 5b4074c2c416448b5d06e287167144493aabda43
+  version: 1f22c0103821b9390939b6776727195525381532
   subpackages:
   - curve25519
-  - ed25519
-  - ed25519/internal/edwards25519
   - ssh
   - ssh/terminal
 - name: golang.org/x/net

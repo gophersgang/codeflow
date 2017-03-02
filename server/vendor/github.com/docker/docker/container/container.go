@@ -28,7 +28,6 @@ import (
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/libcontainerd"
-	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/promise"
@@ -36,6 +35,7 @@ import (
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/docker/restartmanager"
 	"github.com/docker/docker/runconfig"
+	runconfigopts "github.com/docker/docker/runconfig/opts"
 	"github.com/docker/docker/volume"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/libnetwork"
@@ -229,12 +229,6 @@ func (container *Container) SetupWorkingDirectory(rootUID, rootGID int) error {
 
 	container.Config.WorkingDir = filepath.Clean(container.Config.WorkingDir)
 
-	// If can't mount container FS at this point (e.g. Hyper-V Containers on
-	// Windows) bail out now with no action.
-	if !container.canMountFS() {
-		return nil
-	}
-
 	pth, err := container.GetResourcePath(container.Config.WorkingDir)
 	if err != nil {
 		return err
@@ -322,13 +316,12 @@ func (container *Container) CheckpointDir() string {
 }
 
 // StartLogger starts a new logger driver for the container.
-func (container *Container) StartLogger() (logger.Logger, error) {
-	cfg := container.HostConfig.LogConfig
+func (container *Container) StartLogger(cfg containertypes.LogConfig) (logger.Logger, error) {
 	c, err := logger.GetLogDriver(cfg.Type)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get logging factory: %v", err)
+		return nil, fmt.Errorf("Failed to get logging factory: %v", err)
 	}
-	info := logger.Info{
+	ctx := logger.Context{
 		Config:              cfg.Config,
 		ContainerID:         container.ID,
 		ContainerName:       container.Name,
@@ -344,12 +337,12 @@ func (container *Container) StartLogger() (logger.Logger, error) {
 
 	// Set logging file for "json-logger"
 	if cfg.Type == jsonfilelog.Name {
-		info.LogPath, err = container.GetRootResourcePath(fmt.Sprintf("%s-json.log", container.ID))
+		ctx.LogPath, err = container.GetRootResourcePath(fmt.Sprintf("%s-json.log", container.ID))
 		if err != nil {
 			return nil, err
 		}
 	}
-	return c(info)
+	return c(ctx)
 }
 
 // GetProcessLabel returns the process label for the container.
@@ -815,7 +808,7 @@ func (container *Container) BuildJoinOptions(n libnetwork.Network) ([]libnetwork
 	var joinOptions []libnetwork.EndpointOption
 	if epConfig, ok := container.NetworkSettings.Networks[n.Name()]; ok {
 		for _, str := range epConfig.Links {
-			name, alias, err := opts.ParseLink(str)
+			name, alias, err := runconfigopts.ParseLink(str)
 			if err != nil {
 				return nil, err
 			}
@@ -1051,9 +1044,9 @@ func (container *Container) startLogging() error {
 		return nil // do not start logging routines
 	}
 
-	l, err := container.StartLogger()
+	l, err := container.StartLogger(container.HostConfig.LogConfig)
 	if err != nil {
-		return fmt.Errorf("failed to initialize logging driver: %v", err)
+		return fmt.Errorf("Failed to initialize logging driver: %v", err)
 	}
 
 	copier := logger.NewCopier(map[string]io.Reader{"stdout": container.StdoutPipe(), "stderr": container.StderrPipe()}, l)

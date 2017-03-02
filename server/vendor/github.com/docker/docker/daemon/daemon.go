@@ -66,7 +66,7 @@ var (
 	// DefaultInitBinary is the name of the default init binary
 	DefaultInitBinary = "docker-init"
 
-	errSystemNotSupported = errors.New("The Docker daemon is not supported on this platform.")
+	errSystemNotSupported = fmt.Errorf("The Docker daemon is not supported on this platform.")
 )
 
 // Daemon holds information about the Docker daemon.
@@ -348,7 +348,7 @@ func (daemon *Daemon) restore() error {
 		// if the container has restart policy, do not
 		// prepare the mountpoints since it has been done on restarting.
 		// This is to speed up the daemon start when a restart container
-		// has a volume and the volume driver is not available.
+		// has a volume and the volume dirver is not available.
 		if _, ok := restartContainers[c]; ok {
 			continue
 		} else if _, ok := removeContainers[c.ID]; ok {
@@ -446,10 +446,26 @@ func (daemon *Daemon) registerLink(parent, child *container.Container, alias str
 	return nil
 }
 
-// SetClusterProvider sets a component for querying the current cluster state.
-func (daemon *Daemon) SetClusterProvider(clusterProvider cluster.Provider) {
+// DaemonJoinsCluster informs the daemon has joined the cluster and provides
+// the handler to query the cluster component
+func (daemon *Daemon) DaemonJoinsCluster(clusterProvider cluster.Provider) {
+	daemon.setClusterProvider(clusterProvider)
+}
+
+// DaemonLeavesCluster informs the daemon has left the cluster
+func (daemon *Daemon) DaemonLeavesCluster() {
+	// Daemon is in charge of removing the attachable networks with
+	// connected containers when the node leaves the swarm
+	daemon.clearAttachableNetworks()
+	daemon.setClusterProvider(nil)
+}
+
+// setClusterProvider sets a component for querying the current cluster state.
+func (daemon *Daemon) setClusterProvider(clusterProvider cluster.Provider) {
 	daemon.clusterProvider = clusterProvider
-	daemon.netController.SetClusterProvider(clusterProvider)
+	// call this in a goroutine to allow netcontroller handle this event async
+	// and not block if it is in the middle of talking with cluster
+	go daemon.netController.SetClusterProvider(clusterProvider)
 }
 
 // IsSwarmCompatible verifies if the current daemon
@@ -648,7 +664,7 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 	logrus.Infof("Graph migration to content-addressability took %.2f seconds", time.Since(migrationStart).Seconds())
 
 	// Discovery is only enabled when the daemon is launched with an address to advertise.  When
-	// initialized, the daemon is registered and we can store the discovery backend as it's read-only
+	// initialized, the daemon is registered and we can store the discovery backend as its read-only
 	if err := d.initDiscovery(config); err != nil {
 		return nil, err
 	}
@@ -657,7 +673,7 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 	// Check if Devices cgroup is mounted, it is hard requirement for container security,
 	// on Linux.
 	if runtime.GOOS == "linux" && !sysInfo.CgroupDevicesEnabled {
-		return nil, errors.New("Devices cgroup isn't mounted")
+		return nil, fmt.Errorf("Devices cgroup isn't mounted")
 	}
 
 	d.ID = trustKey.PublicKey().KeyID()
@@ -730,7 +746,7 @@ func (daemon *Daemon) shutdownContainer(c *container.Container) error {
 		logrus.Debugf("Found container %s is paused, sending SIGTERM before unpausing it", c.ID)
 		sig, ok := signal.SignalMap["TERM"]
 		if !ok {
-			return errors.New("System does not support SIGTERM")
+			return fmt.Errorf("System does not support SIGTERM")
 		}
 		if err := daemon.kill(c, int(sig)); err != nil {
 			return fmt.Errorf("sending SIGTERM to container %s with error: %v", c.ID, err)
@@ -742,7 +758,7 @@ func (daemon *Daemon) shutdownContainer(c *container.Container) error {
 			logrus.Debugf("container %s failed to exit in %d second of SIGTERM, sending SIGKILL to force", c.ID, stopTimeout)
 			sig, ok := signal.SignalMap["KILL"]
 			if !ok {
-				return errors.New("System does not support SIGKILL")
+				return fmt.Errorf("System does not support SIGKILL")
 			}
 			if err := daemon.kill(c, int(sig)); err != nil {
 				logrus.Errorf("Failed to SIGKILL container %s", c.ID)
@@ -962,7 +978,7 @@ func (daemon *Daemon) configureVolumes(rootUID, rootGID int) (*store.VolumeStore
 	volumedrivers.RegisterPluginGetter(daemon.PluginStore)
 
 	if !volumedrivers.Register(volumesDriver, volumesDriver.Name()) {
-		return nil, errors.New("local volume driver could not be registered")
+		return nil, fmt.Errorf("local volume driver could not be registered")
 	}
 	return store.New(daemon.configStore.Root)
 }
@@ -995,15 +1011,14 @@ func (daemon *Daemon) initDiscovery(config *Config) error {
 // Reload reads configuration changes and modifies the
 // daemon according to those changes.
 // These are the settings that Reload changes:
-// - Daemon labels
-// - Daemon debug log level
-// - Insecure registries
-// - Registry mirrors
+// - Daemon labels.
+// - Daemon debug log level.
+// - Daemon insecure registries.
 // - Daemon max concurrent downloads
 // - Daemon max concurrent uploads
-// - Cluster discovery (reconfigure and restart)
+// - Cluster discovery (reconfigure and restart).
 // - Daemon live restore
-// - Daemon shutdown timeout (in seconds)
+// - Daemon shutdown timeout (in seconds).
 func (daemon *Daemon) Reload(config *Config) (err error) {
 
 	daemon.configStore.reloadLock.Lock()
@@ -1036,14 +1051,6 @@ func (daemon *Daemon) Reload(config *Config) (err error) {
 			return err
 		}
 	}
-
-	if config.IsValueSet("registry-mirrors") {
-		daemon.configStore.Mirrors = config.Mirrors
-		if err := daemon.RegistryService.LoadMirrors(config.Mirrors); err != nil {
-			return err
-		}
-	}
-
 	if config.IsValueSet("live-restore") {
 		daemon.configStore.LiveRestoreEnabled = config.LiveRestoreEnabled
 		if err := daemon.containerdRemote.UpdateOptions(libcontainerd.WithLiveRestore(config.LiveRestoreEnabled)); err != nil {
@@ -1094,16 +1101,6 @@ func (daemon *Daemon) Reload(config *Config) (err error) {
 		attributes["insecure-registries"] = string(insecureRegistries)
 	} else {
 		attributes["insecure-registries"] = "[]"
-	}
-
-	if daemon.configStore.Mirrors != nil {
-		mirrors, err := json.Marshal(daemon.configStore.Mirrors)
-		if err != nil {
-			return err
-		}
-		attributes["registry-mirrors"] = string(mirrors)
-	} else {
-		attributes["registry-mirrors"] = "[]"
 	}
 
 	attributes["cluster-store"] = daemon.configStore.ClusterStore
@@ -1221,7 +1218,7 @@ func (daemon *Daemon) networkOptions(dconfig *Config, pg plugingetter.PluginGett
 	if strings.TrimSpace(dconfig.ClusterStore) != "" {
 		kv := strings.Split(dconfig.ClusterStore, "://")
 		if len(kv) != 2 {
-			return nil, errors.New("kv store daemon config must be of the form KV-PROVIDER://KV-URL")
+			return nil, fmt.Errorf("kv store daemon config must be of the form KV-PROVIDER://KV-URL")
 		}
 		options = append(options, nwconfig.OptionKVProvider(kv[0]))
 		options = append(options, nwconfig.OptionKVProviderURL(kv[1]))
@@ -1287,6 +1284,11 @@ func (daemon *Daemon) pluginShutdown() {
 // PluginManager returns current pluginManager associated with the daemon
 func (daemon *Daemon) PluginManager() *plugin.Manager { // set up before daemon to avoid this method
 	return daemon.pluginManager
+}
+
+// PluginGetter returns current pluginStore associated with the daemon
+func (daemon *Daemon) PluginGetter() *plugin.Store {
+	return daemon.PluginStore
 }
 
 // CreateDaemonRoot creates the root for the daemon

@@ -7,8 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/pkg/testutil"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -35,7 +34,7 @@ RUN find /tmp/`
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
-	buf, err := testutil.ReadBody(body)
+	buf, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 
 	// Make sure Dockerfile exists.
@@ -126,7 +125,7 @@ RUN echo 'right'
 	c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
 	defer body.Close()
-	content, err := testutil.ReadBody(body)
+	content, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 
 	// Build used the wrong dockerfile.
@@ -145,7 +144,7 @@ RUN echo from dockerfile`,
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
-	buf, err := testutil.ReadBody(body)
+	buf, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 
 	out := string(buf)
@@ -167,7 +166,7 @@ RUN echo from Dockerfile`,
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
-	buf, err := testutil.ReadBody(body)
+	buf, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 
 	out := string(buf)
@@ -190,7 +189,7 @@ RUN echo from dockerfile`,
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
-	buf, err := testutil.ReadBody(body)
+	buf, err := readBody(body)
 	c.Assert(err, checker.IsNil)
 
 	out := string(buf)
@@ -237,7 +236,7 @@ func (s *DockerSuite) TestBuildAPIUnnormalizedTarPaths(c *check.C) {
 		c.Assert(err, checker.IsNil)
 		c.Assert(res.StatusCode, checker.Equals, http.StatusOK)
 
-		out, err := testutil.ReadBody(body)
+		out, err := readBody(body)
 		c.Assert(err, checker.IsNil)
 		lines := strings.Split(string(out), "\n")
 		c.Assert(len(lines), checker.GreaterThan, 1)
