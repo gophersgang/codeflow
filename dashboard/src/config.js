@@ -6,7 +6,7 @@ const loadConfig = () => {
   let config = {}
   if (process.env.NODE_ENV === 'development') {
     config = {
-      "REACT_APP_ROOT": "http://localhost:3000",
+      "REACT_APP_ROOT": "http://localhost:"+process.env.REACT_APP_ROOT_PORT,
       "REACT_APP_API_ROOT": "http://localhost:3001",
       "REACT_APP_WS_ROOT": "ws://localhost:3003",
       "REACT_APP_WEBHOOKS_ROOT": "http://localhost:3002",
