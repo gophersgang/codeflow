@@ -57,8 +57,8 @@ plugins:
     registry_username: ""
     registry_password: ""
     registry_user_email: ""
-    build_path: "/tmp"
     docker_host: "unix:///var/run/docker.sock"
+    workdir: "/tmp/docker_build"   
   kubedeploy:
     workers: 1
     kubeconfig: "/etc/secrets/kubeconfig"
