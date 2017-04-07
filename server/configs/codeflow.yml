@@ -75,3 +75,5 @@ plugins:
   git_sync:
     workers: 1
     workdir: "/tmp/git_sync" 
+  heartbeat:
+    workers: 0
