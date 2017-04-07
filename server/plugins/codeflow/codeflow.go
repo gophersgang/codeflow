@@ -180,7 +180,7 @@ func (x *Codeflow) Process(e agent.Event) error {
 		heartBeat := e.Payload.(plugins.HeartBeat)
 		switch heartBeat.Tick {
 		case "minute":
-			GitSyncProjects()
+			GitSyncProjects(nil)
 		}
 		return nil
 	}

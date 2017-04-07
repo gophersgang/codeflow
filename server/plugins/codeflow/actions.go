@@ -945,9 +945,17 @@ func DockerBuildRebuild(r *Release, force bool) error {
 	return nil
 }
 
-func GitSyncProjects() error {
+func GitSyncProjects(ids []bson.ObjectId) error {
+	var query bson.M
 	project := Project{}
-	results := db.Collection("projects").Find(bson.M{})
+
+	if len(ids) > 0 {
+		query = bson.M{"_id": bson.M{"$in": ids}}
+	} else {
+		query = bson.M{}
+	}
+
+	results := db.Collection("projects").Find(query)
 	for results.Next(&project) {
 		feature := Feature{}
 		r := db.Collection("features").Find(bson.M{"projectId": project.Id})

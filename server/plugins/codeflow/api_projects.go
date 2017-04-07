@@ -172,6 +172,10 @@ func (x *Projects) createProjects(w rest.ResponseWriter, r *rest.Request) {
 		}
 	}
 
+	if project.GitProtocol == "HTTPS" {
+		GitSyncProjects([]bson.ObjectId{project.Id})
+	}
+
 	ProjectCreated(&project)
 
 	w.WriteJson(project)
