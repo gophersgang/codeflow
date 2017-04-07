@@ -45,7 +45,7 @@ services:
       - ./dashboard/.env
       - ./dashboard/.env.development
   docs:
-    command: gitbook serve docs
+    command: gitbook serve
     image: codeflow:v004
     build:
       context: .
