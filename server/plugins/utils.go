@@ -46,6 +46,7 @@ func GitCommits(headHash string, project Project, git Git) ([]GitCommit, error) 
 
 		commit := new(GitCommit)
 		author := obj.Author()
+		committer := obj.Committer()
 		commit.Repository = project.Repository
 		commit.Hash = obj.Id().String()
 		if obj.Parent(0) != nil {
@@ -53,7 +54,7 @@ func GitCommits(headHash string, project Project, git Git) ([]GitCommit, error) 
 		}
 		commit.Ref = fmt.Sprintf("refs/heads/%s", git.Branch)
 		commit.User = author.Name
-		commit.Created = author.When
+		commit.Created = committer.When
 		commit.Message = obj.Message()
 		commits = append(commits, *commit)
 
