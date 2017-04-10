@@ -8,3 +8,7 @@ up:
 build:
 	docker-compose build server
 	docker-compose build dashboard
+
+destroy:
+	docker-compose stop
+	docker-compose rm -f
