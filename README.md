@@ -24,3 +24,5 @@ Local dashboard will be started on [http://localhost:3000](http://localhost:3000
 
 ### Hosted docs
 [https://codeflow.checkr.com/](https://codeflow.checkr.com/)
+
+`master` branch continuously deployed with Codeflow!
